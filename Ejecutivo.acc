@@ -1,0 +1,28 @@
+Emision de billetes de literarios
+exclusivo: casa de la moneda.txt
+inclusivo: cono monetario.txt
+anular: El billete de 100 llevara el rostro de Gustavo Adolfo Becquer
+escribir: El billete de 100 llevara el rostro de Miguel de Cervantes
+exclusivo: casa de la moneda.txt
+escribir: se emite la suma de cien millones (100.000.000) en billetes de cien (100)
+exito: aprueba nueva denominacion: el billete de 100 sera "el cervantes"
+fracaso: demora la emision del billete de 100
+
+Emision de billetes poeticos
+exclusivo: casa de la moneda.txt
+inclusivo: cono monetario.txt
+anular: El billete de 100 llevara el rostro de Miguel de Cervantes
+escribir: El billete de 100 llevara el rostro de Gustavo Adolfo Becquer
+exclusivo: casa de la moneda.txt
+escribir: se emite la suma de cien millones (100.000.000) en billetes de cien (100)
+exito: aprueba nueva denominacion: el billete de 100 sera "el becquer"
+fracaso: demora la emision del billete de 100
+
+Emision de billetes literarios
+exclusivo: cono monetario.txt
+anular: El billete de 100 llevara el rostro de Gustavo Adolfo Becquer
+escribir: El billete de 100 llevara el rostro de Miguel de Cervantes
+escribir: El billete de 50 llevara el rostro de Francisco de Quevedo
+escribir: El billete de 20 llevara el rostro de Federico Garcia Lorca
+exito: aprueba nuevo cono monetario con Cervantes, Quevedo y Lorca
+fracaso: no logra acordar nuevo cono monetario; seguiremos viendole la cara a la reina

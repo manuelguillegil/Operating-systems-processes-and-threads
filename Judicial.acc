@@ -1,0 +1,31 @@
+Impuesto Unitario
+inclusivo: Ejecutivo.acc
+escribir: Recaudar impuesto
+escribir: asignar: Ministerio de Finanzas
+escribir: exito: logra recaudar sin inconvenientes
+escribir: fracaso: encuentra una evasion del 100%
+crear: Ministerio de Finanzas
+exito: aprueba Ley para recaudar impuesto 1 vez!
+fracaso: ni siquiera puede ponerse de acuerdo para recaudar impuesto 1 vez!
+
+Ley de Pasaportes
+aprobacion: Presidente
+aprobacion: Congreso
+exclusivo: normas de inmigracion.txt
+escribir: Toda persona debe portar pasaporte
+exito: acaba con la entrada libre! A partir de hoy, todos deberan tener pasaporte
+fracaso: decide no reforzar la frontera: sigue valerse entrar sin pasaporte
+
+Ley de Visas
+aprobacion: Presidente
+exclusivo: normas de inmigracion.txt
+leer: Toda persona debe portar pasaporte
+escribir: Todo visitante debe llevar visa en su pasaporte
+inclusivo: Ejecutivo.acc
+escribir: asignar: Ministerio de Extranjeria
+escribir: inclusivo: normas de inmigracion.txt
+escribir: escribir: Las visas deben emitirse en las embajadas
+escribir: exito: aprueba emision de visas
+escribir: fracaso: pospone implementacion de ley de visas
+exito: coloca barreras nuevas al turismo: los visitantes ahora deben portar visa
+fracaso: rechaza medidas sensatas para controlar la avalancha de turistas
