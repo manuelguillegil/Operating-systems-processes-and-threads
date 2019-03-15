@@ -15,6 +15,28 @@ pthread_t thread_id_ejec;                                                       
 pthread_t thread_id_legis;                                                            //Id de Legislativo                                                            
 pthread_t thread_id_jud;                                                              //Id de Judicial
 
+void deleteAccion(FILE* fp, char* newName, char* Accion){
+    size_t len = 0;
+    char* line;
+
+    FILE* f = fopen("temp.txt", "w");
+    while(getline(&line, &len, fp)!=-1){                                              //Itera por todas las lineas del archivo
+        if(strstr(line, Accion)){                                                     //Si encuentra la accion, no la copia al archivo temporal
+            while(getline(&line, &len, fp)!=-1){                                      //Itera sobre los pasos de la accion
+                if(strlen(line)<=2){                                                  //Cuando llegamos al final de la accion, volvemos a copiar linea por linea
+                    break;
+                }
+            }
+            if(getline(&line, &len, fp)==-1){                                         //Si la accion no copiada era la ultima en el archivo, sale del ciclo principal
+                break;
+            }
+        }
+        fprintf(f, "%s", line);                                                       //Copia la linea a el archivo temporal leida del archivo
+    }
+    fclose(f);                                                                        //cierra f
+    rename("temp.txt", newName);                                                      //Renombra el archivo temporal para aplicar los cambios al archivo original
+}
+
 void *threadEjec(void *vargp) 
 { 
     size_t len = 0;
