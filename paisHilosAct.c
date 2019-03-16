@@ -10,6 +10,7 @@
 int fd[2];                                                                            //Pipe
 int day=1;                                                                            //Inicializa la variable day que cuenta en que dia esta
 int daysMax;                                                                          //int que indica cual es el dia maximo 
+int aunTieneAcciones = 3;                                                             //int que indica cuantos poderes aun tienen acciones disponibles
 pthread_mutex_t mutex;                                                                //Inicializa Mutex que se usa para el pipe entre hilos y la prensa
 pthread_mutex_t mutex1;                                                               //Inicializa Mutex que se usa para modificar day
 pthread_t thread_id_ejec;                                                             //Id de Ejecutivo
@@ -43,6 +44,7 @@ void *threadEjec(void *vargp)
     size_t len = 0;
     char* line;                                                           
     int Encontro;                                                         //Usado para ver cuando se encontro una accion
+    int vacio;
     char toPrensa[200];                                                   //Mensaje que se envia a la prensa
     char* Decision = (char*)calloc(1, 200);                               //Se usa para revisar que que decision en la accion es
     char* nombreAccion = (char*)calloc(1, 200);
@@ -55,17 +57,28 @@ void *threadEjec(void *vargp)
         day++;                                                            //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
+        vacio = TRUE;
         Encontro = FALSE;
         fp = fopen("Ejecutivo.acc", "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
             while(getline(&line, &len, fp) != -1){
-                if(strlen(line) > 2 && strchr(line, ':') == NULL && rand()%5 == 1){       //Mientras la linea no sea un espacio, no contenga el caracter :
-                    Encontro=TRUE;                                                        //y con una posibilidad de 20% de ser escogido
-                    strcpy(nombreAccion, line);
-                    break;                                                                  
+                if(strlen(line) > 2 && strchr(line, ':') == NULL){                        //Mientras la linea no sea un espacio, no contenga el caracter :
+                    vacio = FALSE;
+                    if(rand()%5 == 1){                                                    //y con una posibilidad de 20% de ser escogido
+                        Encontro=TRUE;
+                        strcpy(nombreAccion, line);
+                        break;
+                    }                                                                       
                 }
+            }
+            if(vacio==TRUE){
+                pthread_mutex_lock(&mutex1);
+                day--;                                                            //Se decrementa el dia ya que no es encontro accion
+                aunTieneAcciones--;
+                pthread_mutex_unlock(&mutex1);
+                pthread_exit(NULL);
             }
             if(!Encontro){
                 rewind(fp);
@@ -98,11 +111,12 @@ void *threadEjec(void *vargp)
         strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje    
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
 
-        if(exito){                                                                       //Si la accion es exitosa, se elimina de el archivo
+        if(exito==TRUE){                                                                       //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Ejecutivo.acc", nombreAccion);
         }
-        strcpy(toPrensa, Decision);
+        strcpy(toPrensa, "Presidente ");
+        strcat(toPrensa, Decision);
         write(fd[1], toPrensa, sizeof(toPrensa));                                         //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
         pthread_mutex_unlock(&mutex);                                                     //Se libera el mutex
 
@@ -116,6 +130,7 @@ void *threadLegis(void *vargp)
     size_t len = 0;
     char* line;
     int Encontro;                                                                     //Usado para ver cuando se encontro una accion
+    int vacio;
     char toPrensa[200];                                                               //Mensaje que se envia a la prensa
     char* Decision = (char*)calloc(1, 200);                                           //Se usa para revisar que que decision en la accion es
     char* nombreAccion = (char*)calloc(1, 200);
@@ -128,17 +143,28 @@ void *threadLegis(void *vargp)
         day++;                                                                        //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
+        vacio = TRUE;
         Encontro = FALSE;
         fp = fopen("Legislativo.acc", "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
             while(getline(&line, &len, fp) != -1){
-                if(strlen(line) > 2 && strchr(line, ':') == NULL && rand()%5 == 1){       //Mientras la linea no sea un espacio, no contenga el caracter :
-                    Encontro=TRUE;                                                        //y con una posibilidad de 20% de ser escogido
-                    strcpy(nombreAccion, line);
-                    break;                                                                  
+                if(strlen(line) > 2 && strchr(line, ':') == NULL){                   //Mientras la linea no sea un espacio, no contenga el caracter :
+                    vacio = FALSE;
+                    if(rand()%5 == 1){                                               //y con una posibilidad de 20% de ser escogido
+                        Encontro=TRUE;
+                        strcpy(nombreAccion, line);
+                        break;
+                    }                                                                                             
                 }
+            }
+            if(vacio==TRUE){
+                pthread_mutex_lock(&mutex1);
+                day--;                                                            //Se decrementa el dia ya que no es encontro accion
+                aunTieneAcciones--;                                               //Como ejecutivo ya no tiene acciones, se decrementa la variable
+                pthread_mutex_unlock(&mutex1);
+                pthread_exit(NULL);
             }
             if(!Encontro){
                 rewind(fp);
@@ -171,11 +197,12 @@ void *threadLegis(void *vargp)
         strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje                          
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
 
-        if(exito){                                                                       //Si la accion es exitosa, se elimina de el archivo
+        if(exito==TRUE){                                                                       //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Legislativo.acc", nombreAccion);
         }
-        strcpy(toPrensa, Decision);
+        strcpy(toPrensa, "Congreso ");
+        strcat(toPrensa, Decision);
         write(fd[1], toPrensa, sizeof(toPrensa));                                         //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
         pthread_mutex_unlock(&mutex);                                                     //Se libera el mutex
 
@@ -189,6 +216,7 @@ void *threadJud(void *vargp)
     size_t len = 0;
     char* line;
     int Encontro;                                                             //Usado para ver cuando se encontro una accion
+    int vacio;
     char toPrensa[200];                                                       //Mensaje que se envia a la prensa
     char* Decision = (char*)calloc(1, 200);                                   //Se usa para revisar que que decision en la accion es 
     char* nombreAccion = (char*)calloc(1, 200);   
@@ -201,17 +229,28 @@ void *threadJud(void *vargp)
         day++;                                                                //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
-        Encontro = FALSE;     
+        Encontro = FALSE; 
+        vacio = TRUE;   
         fp = fopen("Judicial.acc", "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
             while(getline(&line, &len, fp) != -1){
-                if(strlen(line) > 2 && strchr(line, ':') == NULL && rand()%5 == 1){       //Mientras la linea no sea un espacio, no contenga el caracter :
-                    Encontro=TRUE;                                                        //y con una posibilidad de 20% de ser escogido
-                    strcpy(nombreAccion, line);
-                    break;                                                                  
+                if(strlen(line) > 2 && strchr(line, ':') == NULL){            //Mientras la linea no sea un espacio, no contenga el caracter :
+                    vacio = FALSE;
+                    if(rand()%5 == 1){                                        //y con una posibilidad de 20% de ser escogido
+                        Encontro=TRUE;
+                        strcpy(nombreAccion, line);
+                        break;
+                    }                                                                                                       
                 }
+            }
+            if(vacio==TRUE){
+                pthread_mutex_lock(&mutex1);
+                day--;                                                            //Se decrementa el dia ya que no es encontro accion
+                aunTieneAcciones--;                                               //Como ejecutivo ya no tiene acciones, se decrementa la variable
+                pthread_mutex_unlock(&mutex1);
+                pthread_exit(NULL);
             }
             if(!Encontro){
                 rewind(fp);
@@ -247,11 +286,12 @@ void *threadJud(void *vargp)
         strcpy(Decision, strtok(NULL,"\0"));                                            //Toma el resto de el mensaje                
         pthread_mutex_lock(&mutex);                                                     //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
 
-        if(exito){                                                                      //Si la accion es exitosa, se elimina de el archivo
+        if(exito==TRUE){                                                                //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Judicial.acc", nombreAccion);
         }
-        strcpy(toPrensa, Decision);
+        strcpy(toPrensa, "Tribunal Supremo ");
+        strcat(toPrensa, Decision);
         write(fd[1], toPrensa, sizeof(toPrensa));                                         //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
         pthread_mutex_unlock(&mutex);                                                     //Se libera el mutex
 
@@ -305,8 +345,11 @@ void main(int argc, char *argv[]){
     pthread_create(&thread_id_jud, NULL, threadJud, NULL);
     pthread_create(&thread_id_prensa, NULL, threadPrensa, NULL);
 
-    pthread_join(thread_id_ejec, NULL);                                               //
+    pthread_join(thread_id_ejec, NULL);                                               
     pthread_join(thread_id_legis, NULL);                                              // Espera que los hilos terminen de ejecutar
-    pthread_join(thread_id_jud, NULL);                                                //
-    pthread_join(thread_id_prensa, NULL);                                             //
+    pthread_join(thread_id_jud, NULL);                                                
+    if(aunTieneAcciones==0){                                                          //Si los poderes se quedaron sin acciones antes de terminar los dias, se cancela a la Prensa
+        pthread_cancel(thread_id_prensa);
+    }
+    pthread_join(thread_id_prensa, NULL);                                             
 }
