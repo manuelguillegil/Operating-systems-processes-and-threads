@@ -5,8 +5,9 @@
 #include <string.h>
 #include <semaphore.h>
 #include <fcntl.h>
+#include <sys/wait.h> 
+#include <errno.h>
  
-
 #define TRUE 1
 #define FALSE 0
 
@@ -14,6 +15,7 @@ int fd[2];                                                                      
 int fd1[2];                                                                           //Pipe entre subprocesos para compartir variable day
 int day=0;                                                                            //Inicializa la variable day que cuenta en que dia esta
 int daysMax;                                                                          //int que indica cual es el dia maximo 
+int aunTieneAcciones = 3;  
 
 void deleteAccion(FILE* fp, char* newName, char* Accion, char* temp){
     size_t len = 0;
@@ -108,7 +110,9 @@ void Ejecutivo(sem_t *sem)
                 break;
             }
         }
-        strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje                                                  
+        strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje  
+
+        sem_wait(sem);                                            
         if(exito==TRUE){                                                                 //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Ejecutivo.acc", nombreAccion, "temp1.txt");
@@ -116,6 +120,8 @@ void Ejecutivo(sem_t *sem)
         strcpy(toPrensa, "Presidente ");
         strcat(toPrensa, Decision);
         write(fd[1], toPrensa, sizeof(toPrensa));                                         //Se escribe la el mensaje de exito/fracaso al pipe que conecta este subproceso con la prensa
+        sem_post(sem);
+
         fclose(fp);                                                                       //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
     } 
     return;
@@ -193,7 +199,9 @@ void Legislativo(sem_t *sem)
                 break;
             }
         }
-        strcpy(Decision, strtok(NULL,"\0"));                                              //Toma el resto de el mensaje                          
+        strcpy(Decision, strtok(NULL,"\0"));                                              //Toma el resto de el mensaje 
+
+        sem_wait(sem);                       
         if(exito==TRUE){                                                                  //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Legislativo.acc", nombreAccion, "temp2.txt");
@@ -201,6 +209,8 @@ void Legislativo(sem_t *sem)
         strcpy(toPrensa, "Congreso ");
         strcat(toPrensa, Decision);
         write(fd[1], toPrensa, sizeof(toPrensa));                                         //Se escribe la el mensaje de exito/fracaso al pipe que conecta este subproceso con la prensa
+        sem_post(sem); 
+
         fclose(fp);
     }
     return;
@@ -281,7 +291,9 @@ void Judicial(sem_t *sem)
                 break;
             }
         }
-        strcpy(Decision, strtok(NULL,"\0"));                                            //Toma el resto de el mensaje                
+        strcpy(Decision, strtok(NULL,"\0"));                                         //Toma el resto de el mensaje 
+
+        sem_wait(sem);               
         if(exito==TRUE){                                                                //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Judicial.acc", nombreAccion, "temp3.txt");
@@ -289,6 +301,8 @@ void Judicial(sem_t *sem)
         strcpy(toPrensa, "Tribunal Supremo ");
         strcat(toPrensa, Decision);
         write(fd[1], toPrensa, sizeof(toPrensa));                                       //Se escribe la el mensaje de exito/fracaso al pipe que conecta este subproceso con la prensa
+        sem_post(sem);
+        
         fclose(fp);
     }
     return;
@@ -310,7 +324,12 @@ void main(int argc, char *argv[]){
         exit(1);
     }
     write(fd1[1], &day, sizeof(day));
- 
+    sem_t * sem;
+    sem=sem_open("mysem", O_CREAT, 0600, 1);
+    if(sem == SEM_FAILED) {
+        perror("parent sem_open");
+        return;
+    }
     if (fork() == 0){
         //Subproceso para Ejecutivo 
         Ejecutivo(sem); 

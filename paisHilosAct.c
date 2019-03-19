@@ -103,15 +103,14 @@ void *threadEjec(void *vargp)
                 exito=TRUE;                        
                 break;
             }
-            else if(strstr(Decision, "fracaso") && rand()%2 == 1){                        //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                        //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
         }
         strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje    
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
-
-        if(exito==TRUE){                                                                       //Si la accion es exitosa, se elimina de el archivo
+        if(exito==TRUE){                                                                 //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Ejecutivo.acc", nombreAccion);
         }
@@ -189,14 +188,13 @@ void *threadLegis(void *vargp)
                 exito=TRUE; 
                 break;
             }
-            else if(strstr(Decision, "fracaso") && rand()%2 == 1){                        //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                        //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
         }
         strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje                          
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
-
         if(exito==TRUE){                                                                       //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Legislativo.acc", nombreAccion);
@@ -278,14 +276,13 @@ void *threadJud(void *vargp)
                 exito=TRUE;                                             
                 break;
             }
-            else if(strstr(Decision, "fracaso") && rand()%2 == 1){                        //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                       //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
         }
         strcpy(Decision, strtok(NULL,"\0"));                                            //Toma el resto de el mensaje                
         pthread_mutex_lock(&mutex);                                                     //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
-
         if(exito==TRUE){                                                                //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Judicial.acc", nombreAccion);
