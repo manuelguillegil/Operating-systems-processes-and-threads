@@ -10,16 +10,31 @@
 int fd[2];                                                                            //Pipe
 
 pthread_mutex_t mutexApro;                                                            //Mutex para sincronizacion entre subprocesos y el hilo de aprobacion
+pthread_mutex_t mutexAproEjec;                                                        //Mutex para sincronizacion entre subprocesos y el hilo de aprobacion de Ejecutivo
 int fdApro[2];                                                                        //Pipe para enviar la aprobacion/reprobacion
+int fdAproEjec[2];                                                                    //Pipe para enviar la aprobacion/reprobacion de Ejecutivo
 
 int day=1;                                                                            //Inicializa la variable day que cuenta en que dia esta
 int daysMax;                                                                          //int que indica cual es el dia maximo 
 int aunTieneAcciones = 3;                                                             //int que indica cuantos poderes aun tienen acciones disponibles
+int numMagistrados = 1;
+int Magistrados[20];
+int PorcentajeExitoEjec = 66;
+int PorcentajeExitoLegis = 66;
 pthread_mutex_t mutex;                                                                //Inicializa Mutex que se usa para el pipe entre hilos y la prensa
 pthread_mutex_t mutex1;                                                               //Inicializa Mutex que se usa para modificar day
+pthread_mutex_t mutexEjec;                                                            //Inicializa Mutex que se usa para el poder ejecutivo y evitar inconsistencia en Ejecutivo.acc
 pthread_t thread_id_ejec;                                                             //Id de Ejecutivo
 pthread_t thread_id_legis;                                                            //Id de Legislativo                                                            
 pthread_t thread_id_jud;                                                              //Id de Judicial
+
+
+/*Funcion para hacer delay, la usamos para cuando hay que hacer esperas menores
+a 1 segundo*/
+void delay(int delay){
+    for(int i=0; i<delay; i++)
+    {}
+}
 
 void deleteAccion(FILE* fp, char* newName, char* Accion){
     size_t len = 0;
@@ -45,6 +60,7 @@ void deleteAccion(FILE* fp, char* newName, char* Accion){
 
 void *threadEjec(void *vargp) 
 { 
+    srand(time(0)); 
     size_t len = 0;
     char* line;                                                           
     int Encontro;                                                         //Usado para ver cuando se encontro una accion
@@ -54,12 +70,13 @@ void *threadEjec(void *vargp)
     char* nombreAccion = (char*)calloc(1, 200);
     int exito;                                                            //Variable para evaluar si la accion fue exitosa o no
     int cancel;
-    srand(time(0)); 
     FILE* fp;                                                             
 
     while(day-1<daysMax){
+        pthread_mutex_lock(&mutexEjec);                                                   //Se bloquea el mutex para evitar inconsistencias en el archivo Ejecutivo.acc mientras se lee
+                                                                                          //Ademas, el hilo aprobacionEjec no podra aprobar nada hasta que liberemos el mutex
         pthread_mutex_lock(&mutex1);
-        day++;                                                            //Se aumenta el dia
+        day++;                                                                            //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
         cancel = FALSE;
@@ -81,9 +98,10 @@ void *threadEjec(void *vargp)
             }
             if(vacio==TRUE){
                 pthread_mutex_lock(&mutex1);
-                day--;                                                            //Se decrementa el dia ya que no es encontro accion
+                day--;                                                                    //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;
-                pthread_mutex_unlock(&mutex1);
+                pthread_mutex_unlock(&mutex1);     
+                pthread_mutex_unlock(&mutexEjec);                                         //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
             if(!Encontro){
@@ -97,30 +115,44 @@ void *threadEjec(void *vargp)
         while(getline(&line, &len, fp)!=-1 && strlen(line)>2){
             strcpy(Decision,strtok(line," "));
             //La accion requiere aprobacion de otro poder
-            if(strstr(Decision, "aprobacion") && cancel==FALSE){
-                strcpy(Decision, strtok(NULL,"\0")); 
-                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){   
-                    int num;                                                    //variable que dira si se aprobo/reprobo la accion
+            if((strstr(Decision, "aprobacion") || strstr(Decision, "reprobacion")) && cancel==FALSE){
+                char* to_who = (char*)malloc(200);                              //Quien debera recibir la señal para que apruebe/repruebe
+                strcpy(to_who, strtok(NULL,"\0"));
+                //Tribunal Supremo aprueba
+                if(strstr(to_who, "Tribunal Supremo")){  
+                    int tot=0;
+                    int i=0;
+                    while(Magistrados[i]!=0){
+                        tot+=Magistrados[i];
+                        i++;
+                    }     
+                    int num;                                                                        //variable que dira si se aprobo/reprobo la accion
                     pthread_mutex_unlock(&mutexApro);
                     read(fdApro[0], &num, sizeof(num));
-                    if(num==0){                                                 //Si no hubo aprobacion, se cancela la accion
-                        printf("cancelado");
+                    //Si requiere aprobacion
+                    if(strstr(Decision, "aprobacion") && (num > tot/numMagistrados)){               //Si no se aprueba, se cancela la accion
+                        cancel=TRUE;
+                    }
+                    //Si puede ser reprobado
+                    else if(strstr(Decision, "reprobacion") && (num <= tot/numMagistrados)){        //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
                     }
                 }
-            }
-            //La accion puede ser reprobada por otro poder
-            else if(strstr(Decision, "reprobacion") && cancel==FALSE){
-                strcpy(Decision, strtok(NULL,"\0")); 
-                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        
-                    int num;                                                    //variable que dira si se aprobo/reprobo la accion
+                //Presidente/Magistrados aprueban
+                else if(strstr(to_who, "Congreso")){
+                    int num;                                                                        //variable que dira si se aprobo/reprobo la accion
                     pthread_mutex_unlock(&mutexApro);
                     read(fdApro[0], &num, sizeof(num));
-                    if(num==1){                                                 //Si hubo reprobacion, se cancela la accion
-                        printf("cancelado");
+                    //Si requiere aprobacion
+                    if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoLegis)){             //Si no se aprueba, se cancela la accion
+                        cancel=TRUE;
+                    }
+                    //Si puede ser reprobado
+                    else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoLegis)){      //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
                     }
                 }
+                free(to_who);
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
 
@@ -128,7 +160,7 @@ void *threadEjec(void *vargp)
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
 
             }
-            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){        //Si la accion es exitosa
+            else if(strstr(Decision, "exito") && rand()%101<=PorcentajeExitoEjec && cancel==FALSE){        //Si la accion es exitosa
                 exito=TRUE;                        
                 break;
             }
@@ -149,6 +181,9 @@ void *threadEjec(void *vargp)
         pthread_mutex_unlock(&mutex);                                                     //Se libera el mutex
 
         fclose(fp);                                                                       //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
+        pthread_mutex_unlock(&mutexEjec);                                                 //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
+        delay(10000);                                                                     //Hace delay para que le de chance a otros hilos de avanzar
+        
     } 
     pthread_exit(NULL);
 }
@@ -207,28 +242,40 @@ void *threadLegis(void *vargp)
         //Ahora ejecuta la accion
         while(getline(&line, &len, fp)!=-1 && strlen(line)>2){
             strcpy(Decision,strtok(line," "));
-            //La accion requiere aprobacion de otro poder
-            if(strstr(Decision, "aprobacion") && cancel==FALSE){
-                strcpy(Decision, strtok(NULL,"\0")); 
-                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        //IMPORTANTE: Quitar Congreso luego
-                    int num;                                                    //variable que dira si se aprobo/reprobo la accion
+            //La accion requiere aprobacion/reprobacion de otro poder
+            if((strstr(Decision, "aprobacion") || strstr(Decision, "reprobacion")) && cancel==FALSE){
+                char* to_who = (char*)malloc(200);                              //Quien debera recibir la señal para que apruebe/repruebe
+                strcpy(to_who, strtok(NULL,"\0"));
+                int num;                                                                            //variable que dira si se aprobo/reprobo la accion
+                //Tribunal Supremo aprueba
+                if(strstr(to_who, "Tribunal Supremo")){  
+                    int tot=0;
+                    int i=0;
+                    while(Magistrados[i]!=0){
+                        tot+=Magistrados[i];
+                        i++;
+                    }                                                                           
                     pthread_mutex_unlock(&mutexApro);
                     read(fdApro[0], &num, sizeof(num));
-                    if(num==0){                                                 //Si no hubo aprobacion, se cancela la accion
-                        printf("cancelado");
+                    //Si requiere aprobacion
+                    if(strstr(Decision, "aprobacion") && (num > tot/numMagistrados)){               //Si no se aprueba, se cancela la accion
+                        cancel=TRUE;
+                    }
+                    //Si puede ser reprobado
+                    else if(strstr(Decision, "reprobacion") && (num <= tot/numMagistrados)){        //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
                     }
                 }
-            }
-            //La accion puede ser reprobada por otro poder
-            else if(strstr(Decision, "reprobacion") && cancel==FALSE){
-                strcpy(Decision, strtok(NULL,"\0")); 
-                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        //IMPORTANTE: Quitar Congreso luego
-                    int num;                                                    //variable que dira si se aprobo/reprobo la accion
-                    pthread_mutex_unlock(&mutexApro);
-                    read(fdApro[0], &num, sizeof(num));
-                    if(num==1){                                                 //Si hubo reprobacion, se cancela la accion
-                        printf("cancelado");
+                //Presidente/Magistrados aprueban
+                else{
+                    pthread_mutex_unlock(&mutexAproEjec);
+                    read(fdAproEjec[0], &num, sizeof(num));
+                    //Si requiere aprobacion
+                    if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoEjec)){              //Si no se aprueba, se cancela la accion
+                        cancel=TRUE;
+                    }
+                    //Si puede ser reprobado
+                    else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoEjec)){       //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
                     }
                 }
@@ -239,11 +286,11 @@ void *threadLegis(void *vargp)
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){ 
 
             }
-            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){        //Si la accion es exitosa
+            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){                   //Si la accion es exitosa
                 exito=TRUE; 
                 break;
             }
-            else if(strstr(Decision, "fracaso")){                                        //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                                   //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
@@ -318,32 +365,39 @@ void *threadJud(void *vargp)
         //Ahora ejecuta la accion
         while(getline(&line, &len, fp)!=-1 && strlen(line)>2){
             strcpy(Decision,strtok(line," "));
-            //La accion requiere aprobacion de otro poder
-            if(strstr(Decision, "aprobacion") && cancel==FALSE){
-                strcpy(Decision, strtok(NULL,"\0")); 
-                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){    //IMPORTANTE: Quitar Tribunal Supremo luego
-                    int num;                                                    //variable que dira si se aprobo/reprobo la accion
+            //La accion requiere aprobacion/reprobacion de otro poder
+            if((strstr(Decision, "aprobacion") || strstr(Decision, "reprobacion")) && cancel==FALSE){
+                char* to_who = (char*)malloc(200);                                                    //Quien debera recibir la señal para que apruebe/repruebe
+                strcpy(to_who, strtok(NULL,"\0"));
+                int num;                                                                              //variable que dira si se aprobo/reprobo la accion
+                //Congreso 
+                if(strstr(to_who, "Congreso")){                                           
                     pthread_mutex_unlock(&mutexApro);
                     read(fdApro[0], &num, sizeof(num));
-                    if(num==0){
-                        printf("cancelado");
+                    //Si debe ser aprobado
+                    if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoLegis)){               //Si no se aprueba, se cancela la accion
+                        cancel=TRUE;
+                    }
+                    //Si puede ser reprobado
+                    else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoLegis)){        //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
                     }
                 }
-            }
-            //La accion puede ser reprobada por otro poder
-            else if(strstr(Decision, "reprobacion") && cancel==FALSE){
-                strcpy(Decision, strtok(NULL,"\0")); 
-                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        //IMPORTANTE: Quitar Congreso luego
-                    int num;                                                    //variable que dira si se aprobo/reprobo la accion
-                    pthread_mutex_unlock(&mutexApro);
-                    read(fdApro[0], &num, sizeof(num));
-                    if(num==1){                                                 //Si hubo reprobacion, se cancela la accion
-                        printf("cancelado");
+                //Presidente o Ministros
+                else{
+                    pthread_mutex_unlock(&mutexAproEjec);
+                    read(fdAproEjec[0], &num, sizeof(num));
+                    //Si requiere aprobacion
+                    if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoEjec)){               //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
                     }
-                }
+                    //Si puede ser reprobado
+                    else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoEjec)){        //Si hubo reprobacion, se cancela la accion
+                        cancel=TRUE;
+                    }
 
+                }
+                free(to_who);
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
 
@@ -351,9 +405,17 @@ void *threadJud(void *vargp)
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
 
             }
-            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){       //Si la accion es exitosa  
-                exito=TRUE;                                             
-                break;
+            else if(strstr(Decision, "exito") && cancel==FALSE){                        //Si la accion es exitosa  
+                int tot=0;
+                int i=0;
+                while(Magistrados[i]!=0){
+                    tot+=Magistrados[i];
+                    i++;
+                }
+                if(rand()%101 <= tot/numMagistrados){
+                    exito=TRUE;                                             
+                    break;
+                }
             }
             else if(strstr(Decision, "fracaso")){                                       //Si la accion fracaza
                 exito=FALSE;
@@ -376,16 +438,33 @@ void *threadJud(void *vargp)
     pthread_exit(NULL);
 }
 
-/*Hilo utilizado para hacer aprobaciones/reprobaciones del poder Judicial y Legislativo. Es un hilo ya que estos poderes pueden
-aprobar/reprobar aun cuando estan ejecutando una accion*/
-void *aprobacion(void *vargp)
+
+void *aprobacionEjec(void *vargp)
 {   
     int num;
     srand(time(0));
     while(TRUE){
-        pthread_mutex_lock(&mutexApro);                                                 //Cuando le dan la señal, el envia la respuesta
-        num = rand()%2;          
-        write(fdApro[1], &num, sizeof(num));                                            //Escribe en el pipe la respuesta
+        pthread_mutex_lock(&mutexAproEjec);                                            //Cuando le dan la señal, el envia la respuesta
+
+        pthread_mutex_lock(&mutexEjec);
+        num = rand()%101;          
+        write(fdAproEjec[1], &num, sizeof(num));                                       //Escribe en el pipe la respuesta
+        pthread_mutex_unlock(&mutexEjec);
+    }
+}
+
+/*Hilo utilizado para hacer aprobaciones/reprobaciones del poder Judicial y Legislativo. Es un hilo ya que estos poderes pueden
+aprobar/reprobar aun cuando estan ejecutando una accion*/
+void *aprobacion(void *vargp)
+{   
+    pthread_t thread_aprobacionEjec;                                                   //hilo que se encarga de la aprobacion de Ejecutivo
+    pthread_create(&thread_aprobacionEjec, NULL, aprobacionEjec, NULL);                //ADVERTENCIA!! Esto ocaciona Seg. Fault   
+    int num;
+    srand(time(0));
+    while(TRUE){
+        pthread_mutex_lock(&mutexApro);                                                //Cuando le dan la señal, el envia la respuesta
+        num = rand()%101;          
+        write(fdApro[1], &num, sizeof(num));                                           //Escribe en el pipe la respuesta
     }
 }
 
@@ -419,10 +498,14 @@ void *threadPrensa(void *vargp)
 
 void main(int argc, char *argv[]){
 
+    memset(Magistrados, 0, sizeof(Magistrados));
+    Magistrados[0] = 66;
+
     daysMax = atoi(argv[1]); 
     if(daysMax<=0){
         exit(1);
     }
+
     pthread_t thread_aprobacion;                                                      //hilo que se encarga de la aprobacion de Judicial y Legislativo
     pthread_create(&thread_aprobacion, NULL, aprobacion, NULL);
     pthread_mutex_lock(&mutexApro);
@@ -436,6 +519,10 @@ void main(int argc, char *argv[]){
         perror("pipe ");                                              
         exit(1);
     }
+    if(pipe(fdAproEjec)<0){                                                           //Inicializa el pipe
+        perror("pipe ");                                              
+        exit(1);
+    }
 
     pthread_create(&thread_id_ejec, NULL, threadEjec, NULL);
     pthread_create(&thread_id_legis, NULL, threadLegis, NULL);
@@ -443,11 +530,12 @@ void main(int argc, char *argv[]){
     pthread_create(&thread_id_prensa, NULL, threadPrensa, NULL);
 
     pthread_join(thread_id_ejec, NULL);                                               
-    pthread_join(thread_id_legis, NULL);                                              // Espera que los hilos terminen de ejecutar
-    pthread_join(thread_id_jud, NULL);                                                
-    if(aunTieneAcciones==0){
+    pthread_join(thread_id_legis, NULL);                                             // Espera que los hilos terminen de ejecutar
+    pthread_join(thread_id_jud, NULL);                                              
+    if(aunTieneAcciones<=0){
         sleep(1);                                                                    //Si los poderes se quedaron sin acciones antes de terminar los dias, se cancela a la Prensa
         pthread_cancel(thread_id_prensa);
+        pthread_cancel(thread_aprobacion);
     }
     pthread_join(thread_id_prensa, NULL);                                             
 }

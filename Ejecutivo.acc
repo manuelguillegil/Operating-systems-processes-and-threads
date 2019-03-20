@@ -1,4 +1,5 @@
-Emision de billetes literarios
+Emision de billetes de literarios
+aprobacion: Congreso
 exclusivo: casa de la moneda.txt
 inclusivo: cono monetario.txt
 anular: El billete de 100 llevara el rostro de Gustavo Adolfo Becquer
@@ -9,6 +10,7 @@ exito: aprueba nueva denominacion: el billete de 100 sera "el cervantes"
 fracaso: demora la emision del billete de 100
 
 Emision de billetes poeticos
+reprobacion: Tribunal Supremo
 exclusivo: casa de la moneda.txt
 inclusivo: cono monetario.txt
 anular: El billete de 100 llevara el rostro de Miguel de Cervantes
