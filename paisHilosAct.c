@@ -8,6 +8,10 @@
 #define FALSE 0
 
 int fd[2];                                                                            //Pipe
+
+pthread_mutex_t mutexApro;                                                            //
+int fdApro[2];                                                                        //
+
 int day=1;                                                                            //Inicializa la variable day que cuenta en que dia esta
 int daysMax;                                                                          //int que indica cual es el dia maximo 
 int aunTieneAcciones = 3;                                                             //int que indica cuantos poderes aun tienen acciones disponibles
@@ -49,6 +53,7 @@ void *threadEjec(void *vargp)
     char* Decision = (char*)calloc(1, 200);                               //Se usa para revisar que que decision en la accion es
     char* nombreAccion = (char*)calloc(1, 200);
     int exito;                                                            //Variable para evaluar si la accion fue exitosa o no
+    int cancel;
     srand(time(0)); 
     FILE* fp;                                                             
 
@@ -57,6 +62,7 @@ void *threadEjec(void *vargp)
         day++;                                                            //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
+        cancel = FALSE;
         vacio = TRUE;
         Encontro = FALSE;
         fp = fopen("Ejecutivo.acc", "r");
@@ -90,16 +96,37 @@ void *threadEjec(void *vargp)
         //Ahora ejecuta la accion
         while(getline(&line, &len, fp)!=-1 && strlen(line)>2){
             strcpy(Decision,strtok(line," "));
-            if(strstr(Decision, "aprobacion")){
+            if(strstr(Decision, "aprobacion") && cancel==FALSE){
+                strcpy(Decision, strtok(NULL,"\0")); 
+                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){   
+                    int num;
+                    pthread_mutex_unlock(&mutexApro);
+                    read(fdApro[0], &num, sizeof(num));
+                    if(num==0){
+                        printf("cancelado");
+                        cancel=TRUE;
+                    }
+                }
+            }
+            else if(strstr(Decision, "reprobacion") && cancel==FALSE){
+                strcpy(Decision, strtok(NULL,"\0")); 
+                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        
+                    int num;
+                    pthread_mutex_unlock(&mutexApro);
+                    read(fdApro[0], &num, sizeof(num));
+                    if(num==1){
+                        printf("cancelado");
+                        cancel=TRUE;
+                    }
+                }
+            }
+            else if(strstr(Decision, "inclusivo") && cancel==FALSE){
 
             }
-            else if(strstr(Decision, "inclusivo")){
+            else if(strstr(Decision, "exclusivo") && cancel==FALSE){
 
             }
-            else if(strstr(Decision, "exclusivo")){
-
-            }
-            else if(strstr(Decision, "exito") && rand()%2 == 1){                          //Si la accion es exitosa
+            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){        //Si la accion es exitosa
                 exito=TRUE;                        
                 break;
             }
@@ -124,6 +151,7 @@ void *threadEjec(void *vargp)
     pthread_exit(NULL);
 }
 
+
 void *threadLegis(void *vargp) 
 { 
     size_t len = 0;
@@ -134,6 +162,7 @@ void *threadLegis(void *vargp)
     char* Decision = (char*)calloc(1, 200);                                           //Se usa para revisar que que decision en la accion es
     char* nombreAccion = (char*)calloc(1, 200);
     int exito;                                                                        //Variable para evaluar si la accion fue exitosa o no
+    int cancel;
     srand(time(0));
     FILE* fp;
 
@@ -142,6 +171,7 @@ void *threadLegis(void *vargp)
         day++;                                                                        //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
+        cancel = FALSE;
         vacio = TRUE;
         Encontro = FALSE;
         fp = fopen("Legislativo.acc", "r");
@@ -175,16 +205,37 @@ void *threadLegis(void *vargp)
         //Ahora ejecuta la accion
         while(getline(&line, &len, fp)!=-1 && strlen(line)>2){
             strcpy(Decision,strtok(line," "));
-            if(strstr(Decision, "aprobacion")){
+            if(strstr(Decision, "aprobacion") && cancel==FALSE){
+                strcpy(Decision, strtok(NULL,"\0")); 
+                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        //IMPORTANTE: Quitar Congreso luego
+                    int num;
+                    pthread_mutex_unlock(&mutexApro);
+                    read(fdApro[0], &num, sizeof(num));
+                    if(num==0){
+                        printf("cancelado");
+                        cancel=TRUE;
+                    }
+                }
+            }
+            else if(strstr(Decision, "reprobacion") && cancel==FALSE){
+                strcpy(Decision, strtok(NULL,"\0")); 
+                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        //IMPORTANTE: Quitar Congreso luego
+                    int num;
+                    pthread_mutex_unlock(&mutexApro);
+                    read(fdApro[0], &num, sizeof(num));
+                    if(num==1){
+                        printf("cancelado");
+                        cancel=TRUE;
+                    }
+                }
+            }
+            else if(strstr(Decision, "inclusivo") && cancel==FALSE){
 
             }
-            else if(strstr(Decision, "inclusivo")){
+            else if(strstr(Decision, "exclusivo") && cancel==FALSE){ 
 
             }
-            else if(strstr(Decision, "exclusivo")){ 
-
-            }
-            else if(strstr(Decision, "exito") && rand()%2 == 1){                          //Si la accion es exitosa
+            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){        //Si la accion es exitosa
                 exito=TRUE; 
                 break;
             }
@@ -195,7 +246,7 @@ void *threadLegis(void *vargp)
         }
         strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje                          
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
-        if(exito==TRUE){                                                                       //Si la accion es exitosa, se elimina de el archivo
+        if(exito==TRUE){                                                                 //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Legislativo.acc", nombreAccion);
         }
@@ -209,6 +260,7 @@ void *threadLegis(void *vargp)
     pthread_exit(NULL);
 }
 
+
 void *threadJud(void *vargp) 
 { 
     size_t len = 0;
@@ -219,6 +271,7 @@ void *threadJud(void *vargp)
     char* Decision = (char*)calloc(1, 200);                                   //Se usa para revisar que que decision en la accion es 
     char* nombreAccion = (char*)calloc(1, 200);   
     int exito;                                                                //Variable para evaluar si la accion fue exitosa o no
+    int cancel;
     srand(time(0));
     FILE* fp;
 
@@ -227,6 +280,7 @@ void *threadJud(void *vargp)
         day++;                                                                //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
+        cancel = FALSE;
         Encontro = FALSE; 
         vacio = TRUE;   
         fp = fopen("Judicial.acc", "r");
@@ -260,19 +314,38 @@ void *threadJud(void *vargp)
         //Ahora ejecuta la accion
         while(getline(&line, &len, fp)!=-1 && strlen(line)>2){
             strcpy(Decision,strtok(line," "));
-            if(strstr(Decision, "aprobacion")){
+            if(strstr(Decision, "aprobacion") && cancel==FALSE){
+                strcpy(Decision, strtok(NULL,"\0")); 
+                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){    //IMPORTANTE: Quitar Tribunal Supremo luego
+                    int num;
+                    pthread_mutex_unlock(&mutexApro);
+                    read(fdApro[0], &num, sizeof(num));
+                    if(num==0){
+                        printf("cancelado");
+                        cancel=TRUE;
+                    }
+                }
+            }
+            else if(strstr(Decision, "reprobacion") && cancel==FALSE){
+                strcpy(Decision, strtok(NULL,"\0")); 
+                if(strstr(Decision, "Tribunal Supremo") || strstr(Decision, "Congreso")){        //IMPORTANTE: Quitar Congreso luego
+                    int num;
+                    pthread_mutex_unlock(&mutexApro);
+                    read(fdApro[0], &num, sizeof(num));
+                    if(num==1){
+                        printf("cancelado");
+                        cancel=TRUE;
+                    }
+                }
 
             }
-            else if(strstr(Decision, "reprobacion")){
+            else if(strstr(Decision, "inclusivo") && cancel==FALSE){
 
             }
-            else if(strstr(Decision, "inclusivo")){
+            else if(strstr(Decision, "exclusivo") && cancel==FALSE){
 
             }
-            else if(strstr(Decision, "exclusivo")){
-
-            }
-            else if(strstr(Decision, "exito") && rand()%2 == 1){                          //Si la accion es exitosa  
+            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){       //Si la accion es exitosa  
                 exito=TRUE;                                             
                 break;
             }
@@ -296,6 +369,19 @@ void *threadJud(void *vargp)
     }
     pthread_exit(NULL);
 }
+
+
+void *aprobacion(void *vargp)
+{   
+    int num;
+    srand(time(0));
+    while(TRUE){
+        pthread_mutex_lock(&mutexApro);
+        num = rand()%2;
+        write(fdApro[1], &num, sizeof(num));
+    }
+}
+
 
 /*Este hilo es la prensa y se encarga de hacer print de las acciones fracazadas o logradas*/
 void *threadPrensa(void *vargp)
@@ -330,9 +416,16 @@ void main(int argc, char *argv[]){
     if(daysMax<=0){
         exit(1);
     }
-    pthread_t thread_id_prensa;
+    pthread_t thread_aprobacion;                                                      //hilo que se encarga de la aprobacion de Judicial y Legislativo
+    pthread_create(&thread_aprobacion, NULL, aprobacion, NULL);
+    pthread_mutex_lock(&mutexApro);
 
+    pthread_t thread_id_prensa;
     if(pipe(fd)<0){                                                                   //Inicializa el pipe
+        perror("pipe ");                                              
+        exit(1);
+    }
+    if(pipe(fdApro)<0){                                                               //Inicializa el pipe
         perror("pipe ");                                              
         exit(1);
     }
@@ -345,7 +438,8 @@ void main(int argc, char *argv[]){
     pthread_join(thread_id_ejec, NULL);                                               
     pthread_join(thread_id_legis, NULL);                                              // Espera que los hilos terminen de ejecutar
     pthread_join(thread_id_jud, NULL);                                                
-    if(aunTieneAcciones==0){                                                          //Si los poderes se quedaron sin acciones antes de terminar los dias, se cancela a la Prensa
+    if(aunTieneAcciones==0){
+        sleep(1);                                                                    //Si los poderes se quedaron sin acciones antes de terminar los dias, se cancela a la Prensa
         pthread_cancel(thread_id_prensa);
     }
     pthread_join(thread_id_prensa, NULL);                                             

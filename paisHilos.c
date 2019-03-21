@@ -24,6 +24,9 @@ int PorcentajeExitoLegis = 66;
 pthread_mutex_t mutex;                                                                //Inicializa Mutex que se usa para el pipe entre hilos y la prensa
 pthread_mutex_t mutex1;                                                               //Inicializa Mutex que se usa para modificar day
 pthread_mutex_t mutexEjec;                                                            //Inicializa Mutex que se usa para el poder ejecutivo y evitar inconsistencia en Ejecutivo.acc
+pthread_mutex_t mutexLegis;
+pthread_mutex_t mutexJud;
+pthread_mutex_t mutexArchivo;
 pthread_t thread_id_ejec;                                                             //Id de Ejecutivo
 pthread_t thread_id_legis;                                                            //Id de Legislativo                                                            
 pthread_t thread_id_jud;                                                              //Id de Judicial
@@ -56,6 +59,42 @@ void deleteAccion(FILE* fp, char* newName, char* Accion){
     }
     fclose(f);                                                                        //cierra f
     rename("temp.txt", newName);                                                      //Renombra el archivo temporal para aplicar los cambios al archivo original
+}
+
+void abrirMutex(char* ArchivoEx){
+    if(strstr(ArchivoEx, "Legislativo.acc")){
+        rename(ArchivoEx, "Legislativo.acc");
+        pthread_mutex_unlock(&mutexLegis);
+    }
+    else if(strstr(ArchivoEx, "Judicial.acc")){
+        rename(ArchivoEx, "Judicial.acc");
+        pthread_mutex_unlock(&mutexJud);
+    }
+    else if(strstr(ArchivoEx, "Ejecutivo.acc")){
+        rename(ArchivoEx, "Ejecutivo.acc");
+        pthread_mutex_unlock(&mutexEjec);
+    }
+    else{
+        pthread_mutex_unlock(&mutexArchivo);
+    }
+}
+
+void cerrarMutex(char* ArchivoEx){
+    if(strstr(ArchivoEx, "Legislativo.acc")){
+        pthread_mutex_lock(&mutexLegis);
+        strcpy(ArchivoEx, "Legislativo.acc");
+    }
+    else if(strstr(ArchivoEx, "Judicial.acc")){
+        pthread_mutex_lock(&mutexJud);
+        strcpy(ArchivoEx, "Judicial.acc");
+    }
+    else if(strstr(ArchivoEx, "Ejecutivo.acc")){
+        pthread_mutex_lock(&mutexEjec);
+        strcpy(ArchivoEx, "Ejecutivo.acc");
+    }
+    else{
+        pthread_mutex_lock(&mutexArchivo);
+    }
 }
 
 void *threadEjec(void *vargp) 
@@ -116,7 +155,7 @@ void *threadEjec(void *vargp)
             strcpy(Decision,strtok(line," "));
             //La accion requiere aprobacion de otro poder
             if((strstr(Decision, "aprobacion") || strstr(Decision, "reprobacion")) && cancel==FALSE){
-                char* to_who = (char*)malloc(200);                              //Quien debera recibir la señal para que apruebe/repruebe
+                char* to_who = (char*)malloc(200);                                                  //Quien debera recibir la señal para que apruebe/repruebe
                 strcpy(to_who, strtok(NULL,"\0"));
                 //Tribunal Supremo aprueba
                 if(strstr(to_who, "Tribunal Supremo")){  
@@ -127,7 +166,7 @@ void *threadEjec(void *vargp)
                         i++;
                     }     
                     int num;                                                                        //variable que dira si se aprobo/reprobo la accion
-                    pthread_mutex_unlock(&mutexApro);
+                    pthread_mutex_unlock(&mutexApro);                                               //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si requiere aprobacion
                     if(strstr(Decision, "aprobacion") && (num > tot/numMagistrados)){               //Si no se aprueba, se cancela la accion
@@ -141,7 +180,7 @@ void *threadEjec(void *vargp)
                 //Presidente/Magistrados aprueban
                 else if(strstr(to_who, "Congreso")){
                     int num;                                                                        //variable que dira si se aprobo/reprobo la accion
-                    pthread_mutex_unlock(&mutexApro);
+                    pthread_mutex_unlock(&mutexApro);                                               //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si requiere aprobacion
                     if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoLegis)){             //Si no se aprueba, se cancela la accion
@@ -156,11 +195,11 @@ void *threadEjec(void *vargp)
             }
             //La accion pide usar un archivo de forma inclusiva
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                int lenght;                                           //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                int lenght = ftell(fp);                              //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 strcpy(Decision, strtok(NULL,"\n")); 
                 FILE* fInclusivo = fopen(Decision, "a+");
 
-                while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
+                while(getline(&line, &len, fp)!=-1){
                     strcpy(Decision,strtok(line," "));
                     //Si la instruccion nos pide leer el archivo y encontrar una linea
                     if(strstr(Decision, "leer")){
@@ -176,15 +215,13 @@ void *threadEjec(void *vargp)
                         if(leer==FALSE){
                             cancel = TRUE;
                             fclose(fInclusivo);
+                            break;
                         }
-                        lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
                         strcpy(Decision, strtok(NULL,"\0"));
-                        printf("Escribe %s", Decision);
-                        fprintf(fInclusivo, "%s", Decision);
-                        lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)           
+                        fprintf(fInclusivo, "%s", Decision);          
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
                     else if(strstr(Decision, "anular")){
@@ -192,7 +229,6 @@ void *threadEjec(void *vargp)
                         int anular = FALSE;
                         while(getline(&line, &len, fInclusivo)!=-1){
                             if(strstr(line, Decision)){
-                                printf("qlq\n");
                                 anular = TRUE;
                                 break;
                             }
@@ -202,7 +238,6 @@ void *threadEjec(void *vargp)
                             fclose(fInclusivo);
                             break;
                         }
-                        lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
                     }
                     //Si la instruccion ya no es escribir/leer/anular
                     else{
@@ -210,10 +245,71 @@ void *threadEjec(void *vargp)
                         fclose(fInclusivo);
                         break;
                     }
+                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
                 }
             }
+            //La accion pide usar un archivo de forma exclusiva
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
+                char* ArchivoEx = (char*)malloc(200);
+                strcpy(ArchivoEx, strtok(NULL,"\n"));
+                //Se busca cual archivo es, si es uno de los poderes o es uno extra
+                cerrarMutex(ArchivoEx);
 
+                int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                FILE* fExclusivo = fopen(ArchivoEx, "a+");
+
+                while(getline(&line, &len, fp)!=-1){
+                    strcpy(Decision,strtok(line," "));
+                    //Si la instruccion nos pide leer el archivo y encontrar una linea
+                    if(strstr(Decision, "leer")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int leer = FALSE; 
+
+                        while(getline(&line, &len, fExclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                leer = TRUE;
+                                break;
+                            }
+                        }
+                        if(leer==FALSE){
+                            cancel = TRUE;
+                            fclose(fExclusivo);
+                            abrirMutex(ArchivoEx);
+                            break;
+                        }
+                    }
+                    //Si la instruccion nos pide escribir en el archivo
+                    else if(strstr(Decision, "escribir")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        fprintf(fExclusivo, "%s", Decision);        
+                    }
+                    //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
+                    else if(strstr(Decision, "anular")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int anular = FALSE;
+                        while(getline(&line, &len, fExclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                anular = TRUE;
+                                break;
+                            }
+                        }
+                        if(anular==TRUE){
+                            cancel = TRUE;
+                            fclose(fExclusivo);
+                            abrirMutex(ArchivoEx);
+                            break;
+                        }
+                    }
+                    //Si la instruccion ya no es escribir/leer/anular
+                    else{
+                        fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
+                        fclose(fExclusivo);
+                        abrirMutex(ArchivoEx);
+                        break;
+                    }
+                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                }
+                free(ArchivoEx);                                                                     //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "exito") && rand()%101<=PorcentajeExitoEjec && cancel==FALSE){        //Si la accion es exitosa
                 exito=TRUE;                        
@@ -238,6 +334,8 @@ void *threadEjec(void *vargp)
         fclose(fp);                                                                       //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
         pthread_mutex_unlock(&mutexEjec);                                                 //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
         delay(10000);                                                                     //Hace delay para que le de chance a otros hilos de avanzar
+                
+        sleep(1);
         
     } 
     pthread_exit(NULL);
@@ -259,6 +357,8 @@ void *threadLegis(void *vargp)
     FILE* fp;
 
     while(day-1<daysMax){
+        pthread_mutex_lock(&mutexLegis);
+
         pthread_mutex_lock(&mutex1);
         day++;                                                                        //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
@@ -336,10 +436,119 @@ void *threadLegis(void *vargp)
                 }
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
+                int lenght = ftell(fp);                                                                  //Obtiene el valor de la posicion (en bytes);                                           //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                strcpy(Decision, strtok(NULL,"\n")); 
+                FILE* fInclusivo = fopen(Decision, "a+");
 
+                while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
+                    strcpy(Decision,strtok(line," "));
+                    //Si la instruccion nos pide leer el archivo y encontrar una linea
+                    if(strstr(Decision, "leer")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int leer = FALSE; 
+
+                        while(getline(&line, &len, fInclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                leer = TRUE;
+                                break;
+                            }
+                        }
+                        if(leer==FALSE){
+                            cancel = TRUE;
+                            fclose(fInclusivo);
+                        }
+                    }
+                    //Si la instruccion nos pide escribir en el archivo
+                    else if(strstr(Decision, "escribir")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        fprintf(fInclusivo, "%s", Decision);          
+                    }
+                    //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
+                    else if(strstr(Decision, "anular")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int anular = FALSE;
+                        while(getline(&line, &len, fInclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                anular = TRUE;
+                                break;
+                            }
+                        }
+                        if(anular==TRUE){
+                            cancel = TRUE;
+                            fclose(fInclusivo);
+                            break;
+                        }
+                    }
+                    //Si la instruccion ya no es escribir/leer/anular
+                    else{
+                        fseek(fp, lenght, SEEK_SET);                                                     //Mueve el apuntador fp a la linea anterior
+                        fclose(fInclusivo);
+                        break;
+                    }
+                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes) 
+                }
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){ 
+                char* ArchivoEx = (char*)malloc(200);
+                strcpy(ArchivoEx, strtok(NULL,"\n"));
+                //Se busca cual archivo es, si es uno de los poderes o es uno extra
+                cerrarMutex(ArchivoEx);
 
+                int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                FILE* fExclusivo = fopen(ArchivoEx, "a+");
+
+                while(getline(&line, &len, fp)!=-1){
+                    strcpy(Decision,strtok(line," "));
+                    //Si la instruccion nos pide leer el archivo y encontrar una linea
+                    if(strstr(Decision, "leer")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int leer = FALSE; 
+
+                        while(getline(&line, &len, fExclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                leer = TRUE;
+                                break;
+                            }
+                        }
+                        if(leer==FALSE){
+                            cancel = TRUE;
+                            fclose(fExclusivo);
+                            abrirMutex(ArchivoEx);
+                            break;
+                        }
+                    }
+                    //Si la instruccion nos pide escribir en el archivo
+                    else if(strstr(Decision, "escribir")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        fprintf(fExclusivo, "%s", Decision);        
+                    }
+                    //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
+                    else if(strstr(Decision, "anular")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int anular = FALSE;
+                        while(getline(&line, &len, fExclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                anular = TRUE;
+                                break;
+                            }
+                        }
+                        if(anular==TRUE){
+                            cancel = TRUE;
+                            fclose(fExclusivo);
+                            abrirMutex(ArchivoEx);
+                            break;
+                        }
+                    }
+                    //Si la instruccion ya no es escribir/leer/anular
+                    else{
+                        fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
+                        fclose(fExclusivo);
+                        abrirMutex(ArchivoEx);
+                        break;
+                    }
+                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                }
+                free(ArchivoEx);                                                                     //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){                   //Si la accion es exitosa
                 exito=TRUE; 
@@ -362,6 +571,10 @@ void *threadLegis(void *vargp)
         pthread_mutex_unlock(&mutex);                                                    //Se libera el mutex
 
         fclose(fp);
+        pthread_mutex_unlock(&mutexLegis);
+        delay(10000);
+
+        sleep(1);
     }
     pthread_exit(NULL);
 }
@@ -382,6 +595,8 @@ void *threadJud(void *vargp)
     FILE* fp;
 
     while(day-1<daysMax){ 
+        pthread_mutex_lock(&mutexJud);
+
         pthread_mutex_lock(&mutex1); 
         day++;                                                                //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
@@ -455,10 +670,119 @@ void *threadJud(void *vargp)
                 free(to_who);
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
+                int lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)                                         //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                strcpy(Decision, strtok(NULL,"\n")); 
+                FILE* fInclusivo = fopen(Decision, "a+");
 
+                while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
+                    strcpy(Decision,strtok(line," "));
+                    //Si la instruccion nos pide leer el archivo y encontrar una linea
+                    if(strstr(Decision, "leer")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int leer = FALSE; 
+
+                        while(getline(&line, &len, fInclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                leer = TRUE;
+                                break;
+                            }
+                        }
+                        if(leer==FALSE){
+                            cancel = TRUE;
+                            fclose(fInclusivo);
+                        }
+                    }
+                    //Si la instruccion nos pide escribir en el archivo
+                    else if(strstr(Decision, "escribir")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        fprintf(fInclusivo, "%s", Decision);          
+                    }
+                    //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
+                    else if(strstr(Decision, "anular")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int anular = FALSE;
+                        while(getline(&line, &len, fInclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                anular = TRUE;
+                                break;
+                            }
+                        }
+                        if(anular==TRUE){
+                            cancel = TRUE;
+                            fclose(fInclusivo);
+                            break;
+                        }
+                    }
+                    //Si la instruccion ya no es escribir/leer/anular
+                    else{
+                        fseek(fp, lenght, SEEK_SET);                                                     //Mueve el apuntador fp a la linea anterior
+                        fclose(fInclusivo);
+                        break;
+                    }
+                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                }
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
+                char* ArchivoEx = (char*)malloc(200);
+                strcpy(ArchivoEx, strtok(NULL,"\n"));
+                //Se busca cual archivo es, si es uno de los poderes o es uno extra
+                cerrarMutex(ArchivoEx);
 
+                int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                FILE* fExclusivo = fopen(ArchivoEx, "a+");
+
+                while(getline(&line, &len, fp)!=-1){
+                    strcpy(Decision,strtok(line," "));
+                    //Si la instruccion nos pide leer el archivo y encontrar una linea
+                    if(strstr(Decision, "leer")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int leer = FALSE; 
+
+                        while(getline(&line, &len, fExclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                leer = TRUE;
+                                break;
+                            }
+                        }
+                        if(leer==FALSE){
+                            cancel = TRUE;
+                            fclose(fExclusivo);
+                            abrirMutex(ArchivoEx);
+                            break;
+                        }
+                    }
+                    //Si la instruccion nos pide escribir en el archivo
+                    else if(strstr(Decision, "escribir")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        fprintf(fExclusivo, "%s", Decision);        
+                    }
+                    //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
+                    else if(strstr(Decision, "anular")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int anular = FALSE;
+                        while(getline(&line, &len, fExclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                anular = TRUE;
+                                break;
+                            }
+                        }
+                        if(anular==TRUE){
+                            cancel = TRUE;
+                            fclose(fExclusivo);
+                            abrirMutex(ArchivoEx);
+                            break;
+                        }
+                    }
+                    //Si la instruccion ya no es escribir/leer/anular
+                    else{
+                        fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
+                        fclose(fExclusivo);
+                        abrirMutex(ArchivoEx);
+                        break;
+                    }
+                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                }
+                free(ArchivoEx);                                                                     //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "exito") && cancel==FALSE){                        //Si la accion es exitosa  
                 int tot=0;
@@ -489,6 +813,10 @@ void *threadJud(void *vargp)
         pthread_mutex_unlock(&mutex);                                                   //Se libera el mutex
 
         fclose(fp);
+        pthread_mutex_unlock(&mutexJud);
+        delay(10000);
+
+        sleep(1);
     }
     pthread_exit(NULL);
 }

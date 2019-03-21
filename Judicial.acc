@@ -1,5 +1,5 @@
 Impuesto Unitario
-inclusivo: Ejecutivo.acc
+exclusivo: Ejecutivo.acc
 escribir: Recaudar impuesto
 escribir: asignar: Ministerio de Finanzas
 escribir: exito: logra recaudar sin inconvenientes
@@ -21,7 +21,7 @@ aprobacion: Presidente
 exclusivo: normas de inmigracion.txt
 leer: Toda persona debe portar pasaporte
 escribir: Todo visitante debe llevar visa en su pasaporte
-inclusivo: Ejecutivo.acc
+exclusivo: Ejecutivo.acc
 escribir: asignar: Ministerio de Extranjeria
 escribir: inclusivo: normas de inmigracion.txt
 escribir: escribir: Las visas deben emitirse en las embajadas
