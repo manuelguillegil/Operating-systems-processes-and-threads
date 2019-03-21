@@ -154,8 +154,63 @@ void *threadEjec(void *vargp)
                 }
                 free(to_who);
             }
+            //La accion pide usar un archivo de forma inclusiva
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
+                int lenght;                                           //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                strcpy(Decision, strtok(NULL,"\n")); 
+                FILE* fInclusivo = fopen(Decision, "a+");
 
+                while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
+                    strcpy(Decision,strtok(line," "));
+                    //Si la instruccion nos pide leer el archivo y encontrar una linea
+                    if(strstr(Decision, "leer")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int leer = FALSE; 
+
+                        while(getline(&line, &len, fInclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                leer = TRUE;
+                                break;
+                            }
+                        }
+                        if(leer==FALSE){
+                            cancel = TRUE;
+                            fclose(fInclusivo);
+                        }
+                        lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                    }
+                    //Si la instruccion nos pide escribir en el archivo
+                    else if(strstr(Decision, "escribir")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        printf("Escribe %s", Decision);
+                        fprintf(fInclusivo, "%s", Decision);
+                        lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)           
+                    }
+                    //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
+                    else if(strstr(Decision, "anular")){
+                        strcpy(Decision, strtok(NULL,"\0"));
+                        int anular = FALSE;
+                        while(getline(&line, &len, fInclusivo)!=-1){
+                            if(strstr(line, Decision)){
+                                printf("qlq\n");
+                                anular = TRUE;
+                                break;
+                            }
+                        }
+                        if(anular==TRUE){
+                            cancel = TRUE;
+                            fclose(fInclusivo);
+                            break;
+                        }
+                        lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                    }
+                    //Si la instruccion ya no es escribir/leer/anular
+                    else{
+                        fseek(fp, lenght, SEEK_SET);                                                     //Mueve el apuntador fp a la linea anterior
+                        fclose(fInclusivo);
+                        break;
+                    }
+                }
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
 
@@ -164,7 +219,7 @@ void *threadEjec(void *vargp)
                 exito=TRUE;                        
                 break;
             }
-            else if(strstr(Decision, "fracaso")){                                        //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                                     //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
