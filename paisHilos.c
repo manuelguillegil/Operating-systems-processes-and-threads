@@ -198,6 +198,7 @@ void *threadEjec(void *vargp)
                 int lenght = ftell(fp);                              //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 strcpy(Decision, strtok(NULL,"\n")); 
                 FILE* fInclusivo = fopen(Decision, "a+");
+                fprintf(fInclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1){
                     strcpy(Decision,strtok(line," "));
@@ -220,8 +221,9 @@ void *threadEjec(void *vargp)
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
-                        strcpy(Decision, strtok(NULL,"\0"));
-                        fprintf(fInclusivo, "%s", Decision);          
+                        strcpy(Decision, strtok(NULL,"\n"));
+                        fprintf(fInclusivo, "\n");  
+                        fprintf(fInclusivo, "%s", Decision);        
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
                     else if(strstr(Decision, "anular")){
@@ -257,6 +259,7 @@ void *threadEjec(void *vargp)
 
                 int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 FILE* fExclusivo = fopen(ArchivoEx, "a+");
+                fprintf(fExclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1){
                     strcpy(Decision,strtok(line," "));
@@ -280,7 +283,8 @@ void *threadEjec(void *vargp)
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
-                        strcpy(Decision, strtok(NULL,"\0"));
+                        strcpy(Decision, strtok(NULL,"\n"));
+                        fprintf(fExclusivo, "\n");  
                         fprintf(fExclusivo, "%s", Decision);        
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
@@ -334,9 +338,6 @@ void *threadEjec(void *vargp)
         fclose(fp);                                                                       //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
         pthread_mutex_unlock(&mutexEjec);                                                 //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
         delay(10000);                                                                     //Hace delay para que le de chance a otros hilos de avanzar
-                
-        sleep(1);
-        
     } 
     pthread_exit(NULL);
 }
@@ -439,6 +440,7 @@ void *threadLegis(void *vargp)
                 int lenght = ftell(fp);                                                                  //Obtiene el valor de la posicion (en bytes);                                           //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 strcpy(Decision, strtok(NULL,"\n")); 
                 FILE* fInclusivo = fopen(Decision, "a+");
+                fprintf(fInclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
                     strcpy(Decision,strtok(line," "));
@@ -460,7 +462,8 @@ void *threadLegis(void *vargp)
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
-                        strcpy(Decision, strtok(NULL,"\0"));
+                        strcpy(Decision, strtok(NULL,"\n"));
+                        fprintf(fInclusivo, "\n");  
                         fprintf(fInclusivo, "%s", Decision);          
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
@@ -496,6 +499,7 @@ void *threadLegis(void *vargp)
 
                 int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 FILE* fExclusivo = fopen(ArchivoEx, "a+");
+                fprintf(fExclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1){
                     strcpy(Decision,strtok(line," "));
@@ -519,8 +523,9 @@ void *threadLegis(void *vargp)
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
-                        strcpy(Decision, strtok(NULL,"\0"));
-                        fprintf(fExclusivo, "%s", Decision);        
+                        strcpy(Decision, strtok(NULL,"\n"));
+                        fprintf(fExclusivo, "\n");  
+                        fprintf(fExclusivo, "%s", Decision);       
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
                     else if(strstr(Decision, "anular")){
@@ -573,8 +578,6 @@ void *threadLegis(void *vargp)
         fclose(fp);
         pthread_mutex_unlock(&mutexLegis);
         delay(10000);
-
-        sleep(1);
     }
     pthread_exit(NULL);
 }
@@ -673,6 +676,7 @@ void *threadJud(void *vargp)
                 int lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)                                         //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 strcpy(Decision, strtok(NULL,"\n")); 
                 FILE* fInclusivo = fopen(Decision, "a+");
+                fprintf(fInclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
                     strcpy(Decision,strtok(line," "));
@@ -694,8 +698,9 @@ void *threadJud(void *vargp)
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
-                        strcpy(Decision, strtok(NULL,"\0"));
-                        fprintf(fInclusivo, "%s", Decision);          
+                        strcpy(Decision, strtok(NULL,"\n"));
+                        fprintf(fInclusivo, "\n");  
+                        fprintf(fInclusivo, "%s", Decision);           
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
                     else if(strstr(Decision, "anular")){
@@ -730,6 +735,7 @@ void *threadJud(void *vargp)
 
                 int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 FILE* fExclusivo = fopen(ArchivoEx, "a+");
+                fprintf(fExclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1){
                     strcpy(Decision,strtok(line," "));
@@ -753,7 +759,8 @@ void *threadJud(void *vargp)
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
-                        strcpy(Decision, strtok(NULL,"\0"));
+                        strcpy(Decision, strtok(NULL,"\n"));
+                        fprintf(fExclusivo, "\n");  
                         fprintf(fExclusivo, "%s", Decision);        
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
@@ -815,8 +822,6 @@ void *threadJud(void *vargp)
         fclose(fp);
         pthread_mutex_unlock(&mutexJud);
         delay(10000);
-
-        sleep(1);
     }
     pthread_exit(NULL);
 }
