@@ -7,29 +7,29 @@
 #define TRUE 1
 #define FALSE 0
 
-int fd[2];                                                                            //Pipe
+int fd[2];                                                                    //Pipe
 
-pthread_mutex_t mutexApro;                                                            //Mutex para sincronizacion entre subprocesos y el hilo de aprobacion
-pthread_mutex_t mutexAproEjec;                                                        //Mutex para sincronizacion entre subprocesos y el hilo de aprobacion de Ejecutivo
-int fdApro[2];                                                                        //Pipe para enviar la aprobacion/reprobacion
-int fdAproEjec[2];                                                                    //Pipe para enviar la aprobacion/reprobacion de Ejecutivo
+pthread_mutex_t mutexApro;                                                    //Mutex para sincronizacion entre subprocesos y el hilo de aprobacion
+pthread_mutex_t mutexAproEjec;                                                //Mutex para sincronizacion entre subprocesos y el hilo de aprobacion de Ejecutivo
+int fdApro[2];                                                                //Pipe para enviar la aprobacion/reprobacion
+int fdAproEjec[2];                                                            //Pipe para enviar la aprobacion/reprobacion de Ejecutivo
 
-int day=1;                                                                            //Inicializa la variable day que cuenta en que dia esta
-int daysMax;                                                                          //int que indica cual es el dia maximo 
-int aunTieneAcciones = 3;                                                             //int que indica cuantos poderes aun tienen acciones disponibles
-int numMagistrados = 1;
-int Magistrados[20];
-int PorcentajeExitoEjec = 66;
-int PorcentajeExitoLegis = 66;
-pthread_mutex_t mutex;                                                                //Inicializa Mutex que se usa para el pipe entre hilos y la prensa
-pthread_mutex_t mutex1;                                                               //Inicializa Mutex que se usa para modificar day
-pthread_mutex_t mutexEjec;                                                            //Inicializa Mutex que se usa para el poder ejecutivo y evitar inconsistencia en Ejecutivo.acc
-pthread_mutex_t mutexLegis;
-pthread_mutex_t mutexJud;
-pthread_mutex_t mutexArchivo;
-pthread_t thread_id_ejec;                                                             //Id de Ejecutivo
-pthread_t thread_id_legis;                                                            //Id de Legislativo                                                            
-pthread_t thread_id_jud;                                                              //Id de Judicial
+int day=1;                                                                    //Variable day que cuenta en que dia esta
+int daysMax;                                                                  //Entero que indica cual es el dia maximo 
+int aunTieneAcciones = 3;                                                     //Entero que indica cuantos poderes aun tienen acciones disponibles
+int numMagistrados = 8;                                                       //Numero de magistrados actualmente
+int Magistrados[20];                                                          //Array con las probabilidades de exito de cada magistrado
+int PorcentajeExitoEjec = 66;                                                 //Probabilidad de exito de Ejecutivo
+int PorcentajeExitoLegis = 66;                                                //Probabilidad de exito de Legislativo
+pthread_mutex_t mutex;                                                        //Mutex que se usa para el pipe entre hilos y la prensa
+pthread_mutex_t mutex1;                                                       //Mutex que se usa para modificar day
+pthread_mutex_t mutexEjec;                                                    //Mutex que se usa por el poder ejecutivo y para evitar inconsistencia en Ejecutivo.acc
+pthread_mutex_t mutexLegis;                                                   //Mutex que se usa para evitar inconsistencia en Legislativo.acc
+pthread_mutex_t mutexJud;                                                     //Mutex que se usa para evitar inconsistencia en Judicial.acc
+pthread_mutex_t mutexArchivo;                                                 //Mutex que se usa para evitar inconsistencia en los otros archivos que se utilicen 
+pthread_t thread_id_ejec;                                                     //Id de Ejecutivo
+pthread_t thread_id_legis;                                                    //Id de Legislativo                                                            
+pthread_t thread_id_jud;                                                      //Id de Judicial
 
 
 /*Funcion para hacer delay, la usamos para cuando hay que hacer esperas menores
@@ -39,6 +39,7 @@ void delay(int delay){
     {}
 }
 
+/*Funcion utilizada para eliminar acciones de los archivos .acc*/
 void deleteAccion(FILE* fp, char* newName, char* Accion){
     size_t len = 0;
     char* line;
@@ -61,6 +62,7 @@ void deleteAccion(FILE* fp, char* newName, char* Accion){
     rename("temp.txt", newName);                                                      //Renombra el archivo temporal para aplicar los cambios al archivo original
 }
 
+/*Funcion utilizada para Desbloquear Mutex luego de que ya no se necesite el uso exclusivo de un archivo*/
 void abrirMutex(char* ArchivoEx){
     if(strstr(ArchivoEx, "Legislativo.acc")){
         rename(ArchivoEx, "Legislativo.acc");
@@ -79,6 +81,7 @@ void abrirMutex(char* ArchivoEx){
     }
 }
 
+/*Funcion utilizada para Bloquear Mutex cuando una accion requiere uso exclusivo de un archivo*/
 void cerrarMutex(char* ArchivoEx){
     if(strstr(ArchivoEx, "Legislativo.acc")){
         pthread_mutex_lock(&mutexLegis);
@@ -97,6 +100,7 @@ void cerrarMutex(char* ArchivoEx){
     }
 }
 
+/*Funcion Thread del Ejecutivo*/
 void *threadEjec(void *vargp) 
 { 
     srand(time(0)); 
@@ -112,10 +116,10 @@ void *threadEjec(void *vargp)
     FILE* fp;                                                             
 
     while(day-1<daysMax){
-        pthread_mutex_lock(&mutexEjec);                                                   //Se bloquea el mutex para evitar inconsistencias en el archivo Ejecutivo.acc mientras se lee
-                                                                                          //Ademas, el hilo aprobacionEjec no podra aprobar nada hasta que liberemos el mutex
+        pthread_mutex_lock(&mutexEjec);                                   //Se bloquea el mutex para evitar inconsistencias en el archivo Ejecutivo.acc mientras se lee
+                                                                          //Ademas, el hilo aprobacionEjec no podra aprobar nada hasta que liberemos el mutex
         pthread_mutex_lock(&mutex1);
-        day++;                                                                            //Se aumenta el dia
+        day++;                                                            //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
         cancel = FALSE;
@@ -588,25 +592,25 @@ void *threadJud(void *vargp)
     size_t len = 0;
     char* line;
     int Encontro;                                                             //Usado para ver cuando se encontro una accion
-    int vacio;
+    int vacio;                                                                //Entero que señalara si el archivo Judicial.acc ya no tiene acciones
     char toPrensa[200];                                                       //Mensaje que se envia a la prensa
     char* Decision = (char*)calloc(1, 200);                                   //Se usa para revisar que que decision en la accion es 
-    char* nombreAccion = (char*)calloc(1, 200);   
+    char* nombreAccion = (char*)calloc(1, 200);                               //Variable que contendra el nombre de la accion actual
     int exito;                                                                //Variable para evaluar si la accion fue exitosa o no
-    int cancel;
-    srand(time(0));
-    FILE* fp;
+    int cancel;                                                               //Se usara para cancelar la ejecucion de una accion
+    srand(time(0));                                                           //Seed del rand()
+    FILE* fp;                                                                 
 
     while(day-1<daysMax){ 
-        pthread_mutex_lock(&mutexJud);
+        pthread_mutex_lock(&mutexJud);                                        //Se bloquea el mutex ya que no se podra usar Judicial.acc mientras ejecute una accion
 
         pthread_mutex_lock(&mutex1); 
         day++;                                                                //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
-        cancel = FALSE;
-        Encontro = FALSE; 
-        vacio = TRUE;   
+        cancel = FALSE;                                                       //
+        Encontro = FALSE;                                                     //Inicializa variables
+        vacio = TRUE;                                                         //
         fp = fopen("Judicial.acc", "r");
 
         //Encuentra una accion, con 20% de probabilidad
@@ -622,14 +626,14 @@ void *threadJud(void *vargp)
                 }
             }
             if(vacio==TRUE){
-                pthread_mutex_lock(&mutex1);
+                pthread_mutex_lock(&mutex1);                                  //Bloquea el mutex para evitar inconsistencias al modificar la variable
                 day--;                                                        //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                           //Como ejecutivo ya no tiene acciones, se decrementa la variable
                 pthread_mutex_unlock(&mutex1);
                 pthread_exit(NULL);
             }
             if(!Encontro){
-                rewind(fp);
+                rewind(fp);                                                   //Si no encontro accion, el apuntador se devuelve al inicio del archivo
             }
             else{
                 break;
@@ -670,13 +674,13 @@ void *threadJud(void *vargp)
                     }
 
                 }
-                free(to_who);
+                free(to_who);                                                                        //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                int lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)                                         //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
+                int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual                                      //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
                 strcpy(Decision, strtok(NULL,"\n")); 
-                FILE* fInclusivo = fopen(Decision, "a+");
-                fprintf(fInclusivo, "\n"); 
+                FILE* fInclusivo = fopen(Decision, "a+");             //Abre el archivo de forma Exclusiva y en modo Append y read (a+)
+                fprintf(fInclusivo, "\n");                            
 
                 while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
                     strcpy(Decision,strtok(line," "));
@@ -685,7 +689,7 @@ void *threadJud(void *vargp)
                         strcpy(Decision, strtok(NULL,"\0"));
                         int leer = FALSE; 
 
-                        while(getline(&line, &len, fInclusivo)!=-1){
+                        while(getline(&line, &len, fInclusivo)!=-1){                    //Si encuentra una linea que concuerde, no se anula la accion
                             if(strstr(line, Decision)){
                                 leer = TRUE;
                                 break;
@@ -693,20 +697,20 @@ void *threadJud(void *vargp)
                         }
                         if(leer==FALSE){
                             cancel = TRUE;
-                            fclose(fInclusivo);
+                            fclose(fInclusivo);                                         //Cierra el Archivo
                         }
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
                         strcpy(Decision, strtok(NULL,"\n"));
-                        fprintf(fInclusivo, "\n");  
-                        fprintf(fInclusivo, "%s", Decision);           
+                        fprintf(fInclusivo, "\n");                                      //Escribe un newline
+                        fprintf(fInclusivo, "%s", Decision);                            //Escribe la instruccion
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
-                        while(getline(&line, &len, fInclusivo)!=-1){
+                        while(getline(&line, &len, fInclusivo)!=-1){                    //Si encuentra una linea que concuerde, se anula la accion
                             if(strstr(line, Decision)){
                                 anular = TRUE;
                                 break;
@@ -714,27 +718,27 @@ void *threadJud(void *vargp)
                         }
                         if(anular==TRUE){
                             cancel = TRUE;
-                            fclose(fInclusivo);
+                            fclose(fInclusivo);                                         //Cierra el archivo
                             break;
                         }
                     }
                     //Si la instruccion ya no es escribir/leer/anular
                     else{
-                        fseek(fp, lenght, SEEK_SET);                                                     //Mueve el apuntador fp a la linea anterior
-                        fclose(fInclusivo);
+                        fseek(fp, lenght, SEEK_SET);                                    //Mueve el apuntador fp a la linea anterior
+                        fclose(fInclusivo);                                             //Cierra el Archivo
                         break;
                     }
-                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                    lenght = ftell(fp);                                                 //Obtiene el valor de la posicion (en bytes)
                 }
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
-                char* ArchivoEx = (char*)malloc(200);
+                char* ArchivoEx = (char*)malloc(200);                 //Variable que tendra el nombre del archivo que se usara de manera Exclusiva
                 strcpy(ArchivoEx, strtok(NULL,"\n"));
                 //Se busca cual archivo es, si es uno de los poderes o es uno extra
-                cerrarMutex(ArchivoEx);
+                cerrarMutex(ArchivoEx);                               //Bloquea el mutex requerido para usar el Arhcivo de manera exclusiva
 
                 int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
-                FILE* fExclusivo = fopen(ArchivoEx, "a+");
+                FILE* fExclusivo = fopen(ArchivoEx, "a+");            //Abre el archivo de forma Exclusiva y en modo Append y read (a+)
                 fprintf(fExclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1){
@@ -744,7 +748,7 @@ void *threadJud(void *vargp)
                         strcpy(Decision, strtok(NULL,"\0"));
                         int leer = FALSE; 
 
-                        while(getline(&line, &len, fExclusivo)!=-1){
+                        while(getline(&line, &len, fExclusivo)!=-1){                    //Si encuentra una linea que concuerde, no se anula la accion
                             if(strstr(line, Decision)){
                                 leer = TRUE;
                                 break;
@@ -752,22 +756,22 @@ void *threadJud(void *vargp)
                         }
                         if(leer==FALSE){
                             cancel = TRUE;
-                            fclose(fExclusivo);
-                            abrirMutex(ArchivoEx);
+                            fclose(fExclusivo);                                         //Cierra el archivo
+                            abrirMutex(ArchivoEx);                                      //Desbloquea el mutex que bloqueo al principio
                             break;
                         }
                     }
                     //Si la instruccion nos pide escribir en el archivo
                     else if(strstr(Decision, "escribir")){
                         strcpy(Decision, strtok(NULL,"\n"));
-                        fprintf(fExclusivo, "\n");  
-                        fprintf(fExclusivo, "%s", Decision);        
+                        fprintf(fExclusivo, "\n");                                      //Escribe un newline
+                        fprintf(fExclusivo, "%s", Decision);                            //Escribe la instruccion
                     }
                     //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
-                        while(getline(&line, &len, fExclusivo)!=-1){
+                        while(getline(&line, &len, fExclusivo)!=-1){                    //Si se encuentra una linea que concuerde, se anula la accion
                             if(strstr(line, Decision)){
                                 anular = TRUE;
                                 break;
@@ -775,26 +779,26 @@ void *threadJud(void *vargp)
                         }
                         if(anular==TRUE){
                             cancel = TRUE;
-                            fclose(fExclusivo);
-                            abrirMutex(ArchivoEx);
+                            fclose(fExclusivo);                                        //Se cierra el Archivo
+                            abrirMutex(ArchivoEx);                                     //Desbloquea el mutex que bloqueo al principio
                             break;
                         }
                     }
                     //Si la instruccion ya no es escribir/leer/anular
                     else{
-                        fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
-                        fclose(fExclusivo);
-                        abrirMutex(ArchivoEx);
+                        fseek(fp, lenght, SEEK_SET);                                    //Mueve el apuntador fp a la linea anterior
+                        fclose(fExclusivo);                                             //Cierra el archivo
+                        abrirMutex(ArchivoEx);                                          //Desbloquea el mutex que bloqueo al principio 
                         break;
                     }
-                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                    lenght = ftell(fp);                                                 //Obtiene el valor de la posicion (en bytes)
                 }
-                free(ArchivoEx);                                                                     //Liberamos memoria de la variable
+                free(ArchivoEx);                                                        //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "exito") && cancel==FALSE){                        //Si la accion es exitosa  
                 int tot=0;
                 int i=0;
-                while(Magistrados[i]!=0){
+                while(Magistrados[i]!=0){                                               //Se calcula la media aritmetica de los Magistrados
                     tot+=Magistrados[i];
                     i++;
                 }
@@ -819,14 +823,15 @@ void *threadJud(void *vargp)
         write(fd[1], toPrensa, sizeof(toPrensa));                                       //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
         pthread_mutex_unlock(&mutex);                                                   //Se libera el mutex
 
-        fclose(fp);
-        pthread_mutex_unlock(&mutexJud);
-        delay(10000);
+        fclose(fp);                                                                     //Cierra el archivo Judicial.acc
+        pthread_mutex_unlock(&mutexJud);                                                //Desbloquea el mutex para que otros hilos usen Judicial.acc
+        delay(10000);                                                                   //Hace delay para que otros hilos usen el archivo Judicial.acc
     }
     pthread_exit(NULL);
 }
 
-
+/*Este hilo se usara para las aprobaciones por parte del Ejecutivo. Hara aprobaciones cuando el Presidente este libre 
+(No este ejecutando una accion)*/
 void *aprobacionEjec(void *vargp)
 {   
     int num;
@@ -834,10 +839,10 @@ void *aprobacionEjec(void *vargp)
     while(TRUE){
         pthread_mutex_lock(&mutexAproEjec);                                            //Cuando le dan la señal, el envia la respuesta
 
-        pthread_mutex_lock(&mutexEjec);
+        pthread_mutex_lock(&mutexEjec);                                                //Espera a que el Presidente este libre
         num = rand()%101;          
         write(fdAproEjec[1], &num, sizeof(num));                                       //Escribe en el pipe la respuesta
-        pthread_mutex_unlock(&mutexEjec);
+        pthread_mutex_unlock(&mutexEjec);                                              
     }
 }
 
@@ -860,13 +865,14 @@ void *aprobacion(void *vargp)
 /*Este hilo es la prensa y se encarga de hacer print de las acciones fracazadas o logradas*/
 void *threadPrensa(void *vargp)
 {   
-    char Hemeroteca[daysMax][200];
-    char toPrensa[200];
-    int print=1;                                                                       //Variable para saber que dia se hizo la accion
-    for(int i=0; i<daysMax; i++){
+    char Hemeroteca[daysMax][200];                                                    //Array de Strings que tendra todas las acciones imprimidas
+    char toPrensa[200];                                                               //Variable para imprimir la accion
+    int print=1;                                                                      //Variable para saber que dia se hizo la accion
+
+    for(int i=0; i<daysMax; i++){                                                     //Limpia el array
         memset(Hemeroteca[i], 0, sizeof(Hemeroteca[i]));
     }
-    while(print-1!=daysMax){
+    while(print-1!=daysMax){                                                          //Mientras aun queden dias
         read(fd[0], toPrensa, sizeof(toPrensa));                                      //Se lee lo que esta en el pipe
 
         if(strstr(toPrensa, "\n")){                                                   //Esto se hace ya que puede que el string no tenga el "\n" al final
@@ -879,18 +885,20 @@ void *threadPrensa(void *vargp)
         memset(toPrensa, 0, sizeof(toPrensa));                                        //Se vacia toPrensa
         print++;
     }
-    close(fd[0]);
-    close(fd[1]);
-    pthread_exit(NULL);
+    close(fd[0]);                                                                     //Cuando termina, cierra el lado Read del pipe
+    close(fd[1]);                                                                     //Tambien cierra el lado write del pipe
+    pthread_exit(NULL);                                                               //Termina la ejecucion del hilo
 }
 
 void main(int argc, char *argv[]){
 
     memset(Magistrados, 0, sizeof(Magistrados));
-    Magistrados[0] = 66;
+    for(int i=0; i<8; i++){                                                           //Inicializa los 8 magistrados
+        Magistrados[i] = 66;
+    }
 
     daysMax = atoi(argv[1]); 
-    if(daysMax<=0){
+    if(daysMax<=0){      
         exit(1);
     }
 
@@ -899,31 +907,31 @@ void main(int argc, char *argv[]){
     pthread_mutex_lock(&mutexApro);
 
     pthread_t thread_id_prensa;
-    if(pipe(fd)<0){                                                                   //Inicializa el pipe
+    if(pipe(fd)<0){                                                                   //Inicializa el pipe fd
         perror("pipe ");                                              
         exit(1);
     }
-    if(pipe(fdApro)<0){                                                               //Inicializa el pipe
+    if(pipe(fdApro)<0){                                                               //Inicializa el pipe fdApro
         perror("pipe ");                                              
         exit(1);
     }
-    if(pipe(fdAproEjec)<0){                                                           //Inicializa el pipe
+    if(pipe(fdAproEjec)<0){                                                           //Inicializa el pipe fdAproEjec
         perror("pipe ");                                              
         exit(1);
     }
 
-    pthread_create(&thread_id_ejec, NULL, threadEjec, NULL);
-    pthread_create(&thread_id_legis, NULL, threadLegis, NULL);
-    pthread_create(&thread_id_jud, NULL, threadJud, NULL);
-    pthread_create(&thread_id_prensa, NULL, threadPrensa, NULL);
+    pthread_create(&thread_id_ejec, NULL, threadEjec, NULL);                          //
+    pthread_create(&thread_id_legis, NULL, threadLegis, NULL);                        //Crea los hilos
+    pthread_create(&thread_id_jud, NULL, threadJud, NULL);                            //
+    pthread_create(&thread_id_prensa, NULL, threadPrensa, NULL);                      //
 
-    pthread_join(thread_id_ejec, NULL);                                               
-    pthread_join(thread_id_legis, NULL);                                             // Espera que los hilos terminen de ejecutar
-    pthread_join(thread_id_jud, NULL);                                              
+    pthread_join(thread_id_ejec, NULL);                                               //
+    pthread_join(thread_id_legis, NULL);                                              // Espera que los hilos terminen de ejecutar
+    pthread_join(thread_id_jud, NULL);                                                //
     if(aunTieneAcciones<=0){
-        sleep(1);                                                                    //Si los poderes se quedaron sin acciones antes de terminar los dias, se cancela a la Prensa
-        pthread_cancel(thread_id_prensa);
-        pthread_cancel(thread_aprobacion);
+        sleep(1);                                                                     
+        pthread_cancel(thread_id_prensa);                                             //Si los poderes se quedaron sin acciones antes de terminar los dias, se cancela a la Prensa
+        pthread_cancel(thread_aprobacion);                                            //Y a los hilos de aprobaciones
     }
     pthread_join(thread_id_prensa, NULL);                                             
 }
