@@ -109,13 +109,15 @@ void cerrarMutex(char* ArchivoEx){
     }
 }
 
+/*Esta funcion contiene la instruccion de abrir de manera exclusiva un Archivo y leer/anular/Escribir. 
+Es usada por los tres poderes*/
 int Exclusivo(FILE* fp, char* ArchivoEx, char* Decision, char* line, size_t len){
     int cancel = FALSE;
 
-    cerrarMutex(ArchivoEx);
+    cerrarMutex(ArchivoEx);                               //Bloquea el mutex requerido para usar el Arhcivo de manera exclusiva
 
-    int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
-    FILE* fExclusivo = fopen(ArchivoEx, "a+");
+    int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo exclusivo a la linea actual
+    FILE* fExclusivo = fopen(ArchivoEx, "a+");            //Abre el archivo de forma Exclusiva y en modo Append y read (a+)
     fprintf(fExclusivo, "\n"); 
 
     while(getline(&line, &len, fp)!=-1){
@@ -126,24 +128,24 @@ int Exclusivo(FILE* fp, char* ArchivoEx, char* Decision, char* line, size_t len)
             int leer = FALSE; 
             rewind(fExclusivo);
 
-            while(getline(&line, &len, fExclusivo)!=-1){
+            while(getline(&line, &len, fExclusivo)!=-1){                                //Si encuentra una linea que concuerde, no se anula la accion
                 if(strstr(line, Decision)){
                     leer = TRUE;
                     break;
                 }
             }
-            if(leer==FALSE){
+            if(leer==FALSE){                                                            //Si no encuentra una linea que concuerde
                 cancel = TRUE;
-                fclose(fExclusivo);
-                abrirMutex(ArchivoEx);
+                fclose(fExclusivo);                                                     //Cierra el archivo
+                abrirMutex(ArchivoEx);                                                  //Desbloquea el mutex que bloqueo al principio
                 break;
             }
         }
         //Si la instruccion nos pide escribir en el archivo
         else if(strstr(Decision, "escribir")){
             strcpy(Decision, strtok(NULL,"\n"));
-            fprintf(fExclusivo, "\n");  
-            fprintf(fExclusivo, "%s", Decision);        
+            fprintf(fExclusivo, "\n");                                                  //Escribe un newline
+            fprintf(fExclusivo, "%s", Decision);                                        //Escribe la instruccion
         }
         //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
         else if(strstr(Decision, "anular")){
@@ -151,29 +153,29 @@ int Exclusivo(FILE* fp, char* ArchivoEx, char* Decision, char* line, size_t len)
             int anular = FALSE;
             rewind(fExclusivo);
 
-            while(getline(&line, &len, fExclusivo)!=-1){
+            while(getline(&line, &len, fExclusivo)!=-1){                                //Si se encuentra una linea que concuerde, se anula la accion
                 if(strstr(line, Decision)){
                     anular = TRUE;
                     break;
                 }
             }
-            if(anular==TRUE){
+            if(anular==TRUE){ 
                 cancel = TRUE;
-                fclose(fExclusivo);
-                abrirMutex(ArchivoEx);
+                fclose(fExclusivo);                                                     //Se cierra el Archivo
+                abrirMutex(ArchivoEx);                                                  //Desbloquea el mutex que bloqueo al principio
                 break;
             }
         }
         //Si la instruccion ya no es escribir/leer/anular
         else{
             fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
-            fclose(fExclusivo);
-            abrirMutex(ArchivoEx);
+            fclose(fExclusivo);                                                          //Cierra el archivo
+            abrirMutex(ArchivoEx);                                                       //Desbloquea el mutex que bloqueo al principio
             break;
         }
         lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
-    }
-    return cancel;
+    } 
+    return cancel;                                                                       //Regresa si la accion debe cancelarse o no.
 }
 
 int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len){
@@ -226,23 +228,23 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
             int leer = FALSE; 
             rewind(fInclusivo);
 
-            while(getline(&line, &len, fInclusivo)!=-1){
+            while(getline(&line, &len, fInclusivo)!=-1){                                //Si encuentra una linea que concuerde, no se anula la accion
                 if(strstr(line, Decision)){
                     leer = TRUE;
                     break;
                 }
             }
-            if(leer==FALSE){
-                cancel = TRUE;
-                fclose(fInclusivo);
+            if(leer==FALSE){                                                            //Si no encuentra una linea que concuerde
+                cancel = TRUE;                                   
+                fclose(fInclusivo);                                                     //Se cierra el archivo 
                 break;
             }
         }
         //Si la instruccion nos pide escribir en el archivo
         else if(strstr(Decision, "escribir")){
             strcpy(Decision, strtok(NULL,"\n"));
-            fprintf(fInclusivo, "\n");  
-            fprintf(fInclusivo, "%s", Decision);        
+            fprintf(fInclusivo, "\n");                                                  //Escribe un newline
+            fprintf(fInclusivo, "%s", Decision);                                        //Escribe la instruccion
         }
         //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
         else if(strstr(Decision, "anular")){
@@ -250,7 +252,7 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
             int anular = FALSE;
             rewind(fInclusivo);
 
-            while(getline(&line, &len, fInclusivo)!=-1){
+            while(getline(&line, &len, fInclusivo)!=-1){                                //Si se encuentra una linea que concuerde, se anula la accion
                 if(strstr(line, Decision)){
                     anular = TRUE;
                     break;
@@ -258,14 +260,14 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
             }
             if(anular==TRUE){
                 cancel = TRUE;
-                fclose(fInclusivo);
+                fclose(fInclusivo);                                                     //Se cierra el archivo
                 break;
             }
         }
         //Si la instruccion ya no es escribir/leer/anular
         else{
-            fseek(fp, lenght, SEEK_SET);                                                     //Mueve el apuntador fp a la linea anterior
-            fclose(fInclusivo);
+            fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
+            fclose(fInclusivo);                                                          //Se cierra el archivo
             break;
         }
         lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
@@ -275,7 +277,7 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
         pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec 
         aunEnInclusivoEjec--;
         if(aunEnInclusivoEjec==0){
-                pthread_mutex_unlock(&mutexEjec);            //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+            pthread_mutex_unlock(&mutexEjec);            //Si es la ultima persona cerrandolo, se desbloquea el mutex para que otros puedan usar el Archivo
         }
         pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
     }
@@ -283,7 +285,7 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
         pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis 
         aunEnInclusivoLegis--;
         if(aunEnInclusivoLegis==0){
-            pthread_mutex_unlock(&mutexLegis);           //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+            pthread_mutex_unlock(&mutexLegis);           //Si es la ultima persona cerrandolo, se desbloquea el mutex para que otros puedan usar el Archivo
         }
         pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
     }
@@ -291,7 +293,7 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
         pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud 
         aunEnInclusivoJud--;
         if(aunEnInclusivoJud==0){
-            pthread_mutex_unlock(&mutexJud);             //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+            pthread_mutex_unlock(&mutexJud);             //Si es la ultima persona cerrandolo, se desbloquea el mutex para que otros puedan usar el Archivo
         }
         pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
     }
@@ -299,46 +301,46 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
         pthread_mutex_lock(&mutex5);                     //Bloqueamos el mutex5 para evitar inconsistencia en la variable aunEnInclusivoArchivo 
         aunEnInclusivoArchivo--;
         if(aunEnInclusivoArchivo==0){
-            pthread_mutex_unlock(&mutexArchivo);         //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+            pthread_mutex_unlock(&mutexArchivo);         //Si es la ultima persona cerrandolo, se desbloquea el mutex para que otros puedan usar el Archivo
         }
         pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
     }
-    return cancel;
+    return cancel;                                       //Retorna si la accion debe cancelarse o no
 }
 
 /*Funcion Thread del Ejecutivo*/
 void *threadEjec(void *vargp) 
 { 
-    srand(time(0)); 
+    srand(time(0));                                                       //Seed del rand()
     size_t len = 0;
     char* line;                                                           
     int Encontro;                                                         //Usado para ver cuando se encontro una accion
-    int vacio;
+    int vacio;                                                            //Entero que señalara si el archivo Ejecutivo.acc ya no tiene acciones
     char toPrensa[200];                                                   //Mensaje que se envia a la prensa
-    char* Decision = (char*)calloc(1, 200);                               //Se usa para revisar que que decision en la accion es
-    char* nombreAccion = (char*)calloc(1, 200);
+    char* Decision = (char*)calloc(1, 200);                               //Se usa para revisar que instruccion en la accion es
+    char* nombreAccion = (char*)calloc(1, 200);                           //Variable que contendra el nombre de la accion actual
     int exito;                                                            //Variable para evaluar si la accion fue exitosa o no
-    int cancel;
+    int cancel;                                                           //Se usara para cancelar la ejecucion de una accion
     FILE* fp;                                                             
 
-    while(day-1<daysMax){
-        pthread_mutex_lock(&mutexEjec);                                   //Se bloquea el mutex para evitar inconsistencias en el archivo Ejecutivo.acc mientras se lee
-                                                                          //Ademas, el hilo aprobacionEjec no podra aprobar nada hasta que liberemos el mutex
+    while(day-1<daysMax){                                               
+        pthread_mutex_lock(&mutexEjec);                                   //Se bloquea el mutex ya que no se podra usar Ejecutivo.acc mientras ejecute una accion
+                                                                          
         pthread_mutex_lock(&mutex1);
         day++;                                                            //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
-        cancel = FALSE;
-        vacio = TRUE;
-        Encontro = FALSE;
+        cancel = FALSE;                                                   //
+        vacio = TRUE;                                                     //Inicializa las variables
+        Encontro = FALSE;                                                 //
         fp = fopen("Ejecutivo.acc", "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
             while(getline(&line, &len, fp) != -1){
-                if(strlen(line) > 2 && strchr(line, ':') == NULL){                        //Mientras la linea no sea un espacio, no contenga el caracter :
+                if(strlen(line) > 2 && strchr(line, ':') == NULL){        //Mientras la linea no sea un espacio, no contenga el caracter :
                     vacio = FALSE;
-                    if(rand()%5 == 1){                                                    //y con una posibilidad de 20% de ser escogido
+                    if(rand()%5 == 1){                                    //y con una posibilidad de 20% de ser escogido
                         Encontro=TRUE;
                         strcpy(nombreAccion, line);
                         break;
@@ -346,17 +348,17 @@ void *threadEjec(void *vargp)
                 }
             }
             if(vacio==TRUE){
-                pthread_mutex_lock(&mutex1);
-                day--;                                                                    //Se decrementa el dia ya que no es encontro accion
-                aunTieneAcciones--;
-                pthread_mutex_unlock(&mutex1); 
-                free(Decision);
-                free(nombreAccion);    
-                pthread_mutex_unlock(&mutexEjec);                                         //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
+                pthread_mutex_lock(&mutex1);                              //Se bloquea el mutex para evitar inconsistencia en la variable day y aunTieneAcciones
+                day--;                                                    //Se decrementa el dia ya que no es encontro accion
+                aunTieneAcciones--;                                       //Como Ejecutivo.acc ya no tiene acciones, se decrementa la variable
+                pthread_mutex_unlock(&mutex1);                            //Se desbloquea el mutex
+                free(Decision);                                           //Liberamos memoria de la variable
+                free(nombreAccion);                                       //Liberamos memoria de la variable
+                pthread_mutex_unlock(&mutexEjec);                         //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
             if(!Encontro){
-                rewind(fp);
+                rewind(fp);                                               //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
                 break;
@@ -402,53 +404,53 @@ void *threadEjec(void *vargp)
                         cancel=TRUE;
                     }
                 }
-                free(to_who);
+                free(to_who);                                                                       //Se libera el espacio de memoria de la variable
             }
             //La accion pide usar un archivo de forma inclusiva
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                char* ArchivoIn = (char*)malloc(200);
+                char* ArchivoIn = (char*)malloc(200);                                        //Nombre del archivo a ser abierto de manera inclusiva
                 strcpy(ArchivoIn, strtok(NULL,"\n"));
 
-                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);
+                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);                      //Llama a la funcion que se encarga de esta instruccion
 
-                free(ArchivoIn);
+                free(ArchivoIn);                                                             //Libera el espacio de memoria de la variable
             }
             //La accion pide usar un archivo de forma exclusiva
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
-                char* ArchivoEx = (char*)malloc(200);
+                char* ArchivoEx = (char*)malloc(200);                                        //Nombre del archivo a ser abierto de manera exclusiva
                 strcpy(ArchivoEx, strtok(NULL,"\n"));
 
-                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);
+                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);                      //Llama a la funcion que se encarga de esta instruccion
 
-                free(ArchivoEx);                                                                     //Liberamos memoria de la variable
+                free(ArchivoEx);                                                             //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "exito") && (rand()%101<=PorcentajeExitoEjec) && cancel==FALSE){        //Si la accion es exitosa
                 exito=TRUE;                        
                 break;
             }
-            else if(strstr(Decision, "fracaso")){                                                     //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                                            //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
         }
-        strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje
-        pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
-        if(exito==TRUE){                                                                 //Si la accion es exitosa, se elimina de el archivo
+        strcpy(Decision, strtok(NULL,"\0"));                                  //Toma el resto de el mensaje
+        pthread_mutex_lock(&mutex);                                           //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
+        if(exito==TRUE){                                                      //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, "Ejecutivo.acc", nombreAccion);
         }
         strcpy(toPrensa, "Presidente ");
         strcat(toPrensa, Decision);
-        write(fd[1], toPrensa, sizeof(toPrensa));                                         //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
-        pthread_mutex_unlock(&mutex);                                                     //Se libera el mutex
+        write(fd[1], toPrensa, sizeof(toPrensa));                             //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
+        pthread_mutex_unlock(&mutex);                                         //Se libera el mutex
 
-        fclose(fp);                                                                       //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
-        pthread_mutex_unlock(&mutexEjec);                                                 //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
-        delay(10000);                                                                     //Hace delay para que le de chance a otros hilos de avanzar
+        fclose(fp);                                                           //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
+        pthread_mutex_unlock(&mutexEjec);                                     //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
+        delay(10000);                                                         //Hace delay para que le de chance a otros hilos de avanzar
     } 
-    free(Decision);
-    free(nombreAccion);
-    pthread_exit(NULL);
+    free(Decision);                                                           //Libera el espacio en memoria de la variable
+    free(nombreAccion);                                                       //Libera el espacio en memoria de la variable
+    pthread_exit(NULL);                                                       //Termina la ejecucion del Hilo
 }
 
 
@@ -494,9 +496,9 @@ void *threadLegis(void *vargp)
                 pthread_mutex_lock(&mutex1);
                 day--;                                                            //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                               //Como ejecutivo ya no tiene acciones, se decrementa la variable
-                pthread_mutex_unlock(&mutex1);
-                free(Decision);
-                free(nombreAccion);
+                pthread_mutex_unlock(&mutex1);           
+                free(Decision);                                                   //Liberamos memoria de la variable
+                free(nombreAccion);                                               //Liberamos memoria de la variable
                 pthread_mutex_unlock(&mutexLegis);                                //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
@@ -636,8 +638,8 @@ void *threadJud(void *vargp)
                 day--;                                                        //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                           //Como ejecutivo ya no tiene acciones, se decrementa la variable
                 pthread_mutex_unlock(&mutex1);
-                free(Decision);
-                free(nombreAccion);
+                free(Decision);                                               //Liberamos memoria de la variable
+                free(nombreAccion);                                           //Liberamos memoria de la variable
                 pthread_mutex_unlock(&mutexJud);                              //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }

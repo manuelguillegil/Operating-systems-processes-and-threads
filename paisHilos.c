@@ -802,7 +802,7 @@ void *threadJud(void *vargp)
             if(vacio==TRUE){
                 pthread_mutex_lock(&mutex1);                                  //Bloquea el mutex para evitar inconsistencias al modificar la variable
                 day--;                                                        //Se decrementa el dia ya que no es encontro accion
-                aunTieneAcciones--;                                           //Como ejecutivo ya no tiene acciones, se decrementa la variable
+                aunTieneAcciones--;                                           //Como Judicial.acc ya no tiene acciones, se decrementa la variable
                 pthread_mutex_unlock(&mutex1);
                 free(Decision);
                 free(nombreAccion);
@@ -810,7 +810,7 @@ void *threadJud(void *vargp)
                 pthread_exit(NULL);
             }
             if(!Encontro){
-                rewind(fp);                                                   //Si no encontro accion, el apuntador se devuelve al inicio del archivo
+                rewind(fp);                                                   //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
                 break;
@@ -826,7 +826,7 @@ void *threadJud(void *vargp)
                 int num;                                                                              //variable que dira si se aprobo/reprobo la accion
                 //Congreso 
                 if(strstr(to_who, "Congreso")){                                           
-                    pthread_mutex_unlock(&mutexApro);
+                    pthread_mutex_unlock(&mutexApro);                                                 //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si debe ser aprobado
                     if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoLegis)){               //Si no se aprueba, se cancela la accion
@@ -839,19 +839,19 @@ void *threadJud(void *vargp)
                 }
                 //Presidente o Ministros
                 else{
-                    pthread_mutex_unlock(&mutexAproEjec);
+                    pthread_mutex_unlock(&mutexAproEjec);                                             //Manda una señal a el hilo que aprueba
                     read(fdAproEjec[0], &num, sizeof(num));
                     //Si requiere aprobacion
-                    if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoEjec)){               //Si no se aprueba, se cancela la accion
+                    if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoEjec)){                //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
                     }
                     //Si puede ser reprobado
-                    else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoEjec)){        //Si hubo reprobacion, se cancela la accion
+                    else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoEjec)){         //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
                     }
 
                 }
-                free(to_who);                                                                        //Liberamos memoria de la variable
+                free(to_who);                                                                         //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
                 char* ArchivoIn = (char*)malloc(200);
