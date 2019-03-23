@@ -14,7 +14,11 @@ pthread_mutex_t mutexAproEjec;                                                //
 int fdApro[2];                                                                //Pipe para enviar la aprobacion/reprobacion
 int fdAproEjec[2];                                                            //Pipe para enviar la aprobacion/reprobacion de Ejecutivo
 
-int day=1;                                                                    //Variable day que cuenta en que dia esta
+int aunEnInclusivoEjec = 0;                                                   //
+int aunEnInclusivoLegis = 0;                                                  // Variables utilizadas para saber cuantos poderes aun esta en inclusivo
+int aunEnInclusivoJud = 0;                                                    // (Las usamos para resolver el problema de Lectores/Escritores generado por
+int aunEnInclusivoArchivo = 0;                                                // abrir archivos de manera inclusiva o exclusiva)
+int day = 1;                                                                  //Variable day que cuenta en que dia esta
 int daysMax;                                                                  //Entero que indica cual es el dia maximo 
 int aunTieneAcciones = 3;                                                     //Entero que indica cuantos poderes aun tienen acciones disponibles
 int numMagistrados = 8;                                                       //Numero de magistrados actualmente
@@ -23,6 +27,10 @@ int PorcentajeExitoEjec = 66;                                                 //
 int PorcentajeExitoLegis = 66;                                                //Probabilidad de exito de Legislativo
 pthread_mutex_t mutex;                                                        //Mutex que se usa para el pipe entre hilos y la prensa
 pthread_mutex_t mutex1;                                                       //Mutex que se usa para modificar day
+pthread_mutex_t mutex2;                                                       //Mutex que se usa para modificar la variable aunEnInlcusivoEjec
+pthread_mutex_t mutex3;                                                       //Mutex que se usa para modificar la variable aunEnInlcusivoLegis
+pthread_mutex_t mutex4;                                                       //Mutex que se usa para modificar la variable aunEnInlcusivoJud
+pthread_mutex_t mutex5;                                                       //Mutex que se usa para modificar la variable aunEnInlcusivoArchivo
 pthread_mutex_t mutexEjec;                                                    //Mutex que se usa por el poder ejecutivo y para evitar inconsistencia en Ejecutivo.acc
 pthread_mutex_t mutexLegis;                                                   //Mutex que se usa para evitar inconsistencia en Legislativo.acc
 pthread_mutex_t mutexJud;                                                     //Mutex que se usa para evitar inconsistencia en Judicial.acc
@@ -69,15 +77,12 @@ void deleteAccion(FILE* fp, char* newName, char* Accion){
 /*Funcion utilizada para Desbloquear Mutex luego de que ya no se necesite el uso exclusivo de un archivo*/
 void abrirMutex(char* ArchivoEx){
     if(strstr(ArchivoEx, "Legislativo.acc")){
-        rename(ArchivoEx, "Legislativo.acc");
         pthread_mutex_unlock(&mutexLegis);
     }
     else if(strstr(ArchivoEx, "Judicial.acc")){
-        rename(ArchivoEx, "Judicial.acc");
         pthread_mutex_unlock(&mutexJud);
     }
     else if(strstr(ArchivoEx, "Ejecutivo.acc")){
-        rename(ArchivoEx, "Ejecutivo.acc");
         pthread_mutex_unlock(&mutexEjec);
     }
     else{
@@ -147,7 +152,9 @@ void *threadEjec(void *vargp)
                 pthread_mutex_lock(&mutex1);
                 day--;                                                                    //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;
-                pthread_mutex_unlock(&mutex1);     
+                pthread_mutex_unlock(&mutex1); 
+                free(Decision);
+                free(nombreAccion);    
                 pthread_mutex_unlock(&mutexEjec);                                         //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
@@ -202,9 +209,47 @@ void *threadEjec(void *vargp)
             }
             //La accion pide usar un archivo de forma inclusiva
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
+                char* ArchivoIn = (char*)malloc(200);
+                strcpy(ArchivoIn, strtok(NULL,"\n"));
+ 
+                if(strstr(ArchivoIn, "Ejecutivo")){                  //Si se abrira Ejecutivo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec
+                    aunEnInclusivoEjec++;
+                    if(aunEnInclusivoEjec==1){
+                        strcpy(ArchivoIn, "Ejecutivo.acc");
+                        pthread_mutex_lock(&mutexEjec);              //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Legislativo")){           //Si se abrira Legislativo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis
+                    aunEnInclusivoLegis++;
+                    if(aunEnInclusivoLegis==1){
+                        strcpy(ArchivoIn, "Legislativo.acc");
+                        pthread_mutex_lock(&mutexLegis);             //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Judicial")){              //Si se abrira Judicial de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud
+                    aunEnInclusivoJud++;
+                    if(aunEnInclusivoJud==1){
+                        strcpy(ArchivoIn, "Judicial.acc");
+                        pthread_mutex_lock(&mutexJud);               //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
+                }
+                else{                                                //Si se abrira otro Archivo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex5);                     //Bloqueamos el mutex5 para evitar inconsistencia en la variable aunEnInclusivoArchivo
+                    aunEnInclusivoArchivo++;
+                    if(aunEnInclusivoArchivo==1){
+                        pthread_mutex_lock(&mutexArchivo);           //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
+                }
+
                 int lenght = ftell(fp);                              //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
-                strcpy(Decision, strtok(NULL,"\n")); 
-                FILE* fInclusivo = fopen(Decision, "a+");
+                FILE* fInclusivo = fopen(ArchivoIn, "a+");
                 fprintf(fInclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1){
@@ -259,6 +304,41 @@ void *threadEjec(void *vargp)
                     }
                     lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
                 }
+
+                if(strstr(ArchivoIn, "Ejecutivo")){                  //Cuando salga de Ejecutivo.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec 
+                    aunEnInclusivoEjec--;
+                    if(aunEnInclusivoEjec==0){
+                        pthread_mutex_unlock(&mutexEjec);            //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Legislativo")){           //Cuando salga de Legislativo.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis 
+                    aunEnInclusivoLegis--;
+                    if(aunEnInclusivoLegis==0){
+                        pthread_mutex_unlock(&mutexLegis);           //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Judicial")){              //Cuando salga de Judicial.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud 
+                    aunEnInclusivoJud--;
+                    if(aunEnInclusivoJud==0){
+                        pthread_mutex_unlock(&mutexJud);             //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
+                }
+                else{                                                //Cuando salga de otro Archivo, se decrementa la variable
+                    pthread_mutex_lock(&mutex5);                     //Bloqueamos el mutex5 para evitar inconsistencia en la variable aunEnInclusivoArchivo 
+                    aunEnInclusivoArchivo--;
+                    if(aunEnInclusivoArchivo==0){
+                        pthread_mutex_unlock(&mutexArchivo);         //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
+                }
+
+                free(ArchivoIn);
             }
             //La accion pide usar un archivo de forma exclusiva
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
@@ -337,7 +417,7 @@ void *threadEjec(void *vargp)
                 break;
             }
         }
-        strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje    
+        strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
         if(exito==TRUE){                                                                 //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
@@ -351,8 +431,9 @@ void *threadEjec(void *vargp)
         fclose(fp);                                                                       //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
         pthread_mutex_unlock(&mutexEjec);                                                 //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
         delay(10000);                                                                     //Hace delay para que le de chance a otros hilos de avanzar
-        sleep(1);
     } 
+    free(Decision);
+    free(nombreAccion);
     pthread_exit(NULL);
 }
 
@@ -400,6 +481,8 @@ void *threadLegis(void *vargp)
                 day--;                                                            //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                               //Como ejecutivo ya no tiene acciones, se decrementa la variable
                 pthread_mutex_unlock(&mutex1);
+                free(Decision);
+                free(nombreAccion);
                 pthread_mutex_unlock(&mutexLegis);                                //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
@@ -453,9 +536,47 @@ void *threadLegis(void *vargp)
                 free(to_who);
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                int lenght = ftell(fp);                                                                  //Obtiene el valor de la posicion (en bytes);                                           //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
-                strcpy(Decision, strtok(NULL,"\n")); 
-                FILE* fInclusivo = fopen(Decision, "a+");
+                char* ArchivoIn = (char*)malloc(200);
+                strcpy(ArchivoIn, strtok(NULL,"\n"));
+
+                if(strstr(ArchivoIn, "Ejecutivo")){                  //Si se abrira Ejecutivo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec
+                    aunEnInclusivoEjec++;
+                    if(aunEnInclusivoEjec==1){
+                        strcpy(ArchivoIn, "Ejecutivo.acc");
+                        pthread_mutex_lock(&mutexEjec);              //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Legislativo")){           //Si se abrira Legislativo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis
+                    aunEnInclusivoLegis++;
+                    if(aunEnInclusivoLegis==1){
+                        strcpy(ArchivoIn, "Legislativo.acc");
+                        pthread_mutex_lock(&mutexLegis);             //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Judicial")){              //Si se abrira Judicial de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud
+                    aunEnInclusivoJud++;
+                    if(aunEnInclusivoJud==1){
+                        strcpy(ArchivoIn, "Judicial.acc");
+                        pthread_mutex_lock(&mutexJud);               //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
+                }
+                else{                                                //Si se abrira otro Archivo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex5);                     //Bloqueamos el mutex5 para evitar inconsistencia en la variable aunEnInclusivoArchivo
+                    aunEnInclusivoArchivo++;
+                    if(aunEnInclusivoArchivo==1){
+                        pthread_mutex_lock(&mutexArchivo);           //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
+                }
+
+                int lenght = ftell(fp);                                                                  //Obtiene el valor de la posicion (en bytes); 
+                FILE* fInclusivo = fopen(ArchivoIn, "a+");
                 fprintf(fInclusivo, "\n"); 
 
                 while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
@@ -509,6 +630,41 @@ void *threadLegis(void *vargp)
                     }
                     lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes) 
                 }
+
+                if(strstr(ArchivoIn, "Ejecutivo")){                  //Cuando salga de Ejecutivo.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec 
+                    aunEnInclusivoEjec--;
+                    if(aunEnInclusivoEjec==0){
+                        pthread_mutex_unlock(&mutexEjec);            //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Legislativo")){           //Cuando salga de Legislativo.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis 
+                    aunEnInclusivoLegis--;
+                    if(aunEnInclusivoLegis==0){
+                        pthread_mutex_unlock(&mutexLegis);           //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Judicial")){              //Cuando salga de Judicial.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud 
+                    aunEnInclusivoJud--;
+                    if(aunEnInclusivoJud==0){
+                        pthread_mutex_unlock(&mutexJud);             //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
+                }
+                else{                                                //Cuando salga de otro Archivo, se decrementa la variable
+                    pthread_mutex_lock(&mutex5);                     //Bloqueamos el mutex5 para evitar inconsistencia en la variable aunEnInclusivoArchivo 
+                    aunEnInclusivoArchivo--;
+                    if(aunEnInclusivoArchivo==0){
+                        pthread_mutex_unlock(&mutexArchivo);         //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
+                }
+
+                free(ArchivoIn);
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){ 
                 char* ArchivoEx = (char*)malloc(200);
@@ -648,6 +804,8 @@ void *threadJud(void *vargp)
                 day--;                                                        //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                           //Como ejecutivo ya no tiene acciones, se decrementa la variable
                 pthread_mutex_unlock(&mutex1);
+                free(Decision);
+                free(nombreAccion);
                 pthread_mutex_unlock(&mutexJud);                              //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
@@ -696,9 +854,47 @@ void *threadJud(void *vargp)
                 free(to_who);                                                                        //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual                                      //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
-                strcpy(Decision, strtok(NULL,"\n")); 
-                FILE* fInclusivo = fopen(Decision, "a+");             //Abre el archivo de forma Exclusiva y en modo Append y read (a+)
+                char* ArchivoIn = (char*)malloc(200);
+                strcpy(ArchivoIn, strtok(NULL,"\n"));
+
+                if(strstr(ArchivoIn, "Ejecutivo")){                  //Si se abrira Ejecutivo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec
+                    aunEnInclusivoEjec++;
+                    if(aunEnInclusivoEjec==1){
+                        strcpy(ArchivoIn, "Ejecutivo.acc");
+                        pthread_mutex_lock(&mutexEjec);              //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Legislativo")){           //Si se abrira Legislativo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis
+                    aunEnInclusivoLegis++;
+                    if(aunEnInclusivoLegis==1){
+                        strcpy(ArchivoIn, "Legislativo.acc");
+                        pthread_mutex_lock(&mutexLegis);             //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Judicial")){              //Si se abrira Judicial de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud
+                    aunEnInclusivoJud++;
+                    if(aunEnInclusivoJud==1){
+                        strcpy(ArchivoIn, "Judicial.acc");
+                        pthread_mutex_lock(&mutexJud);               //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
+                }
+                else{                                                //Si se abrira otro Archivo de manera inclusiva, aumentamos el contador 
+                    pthread_mutex_lock(&mutex5);                     //Bloqueamos el mutex5 para evitar inconsistencia en la variable aunEnInclusivoArchivo
+                    aunEnInclusivoArchivo++;
+                    if(aunEnInclusivoArchivo==1){
+                        pthread_mutex_lock(&mutexArchivo);           //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
+                }
+
+                int lenght = ftell(fp);                               //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual                   
+                FILE* fInclusivo = fopen(ArchivoIn, "a+");            //Abre el archivo de forma Exclusiva y en modo Append y read (a+)
                 fprintf(fInclusivo, "\n");                            
 
                 while(getline(&line, &len, fp)!=-1 && cancel==FALSE){
@@ -752,6 +948,41 @@ void *threadJud(void *vargp)
                     }
                     lenght = ftell(fp);                                                 //Obtiene el valor de la posicion (en bytes)
                 }
+
+                if(strstr(ArchivoIn, "Ejecutivo")){                  //Cuando salga de Ejecutivo.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec 
+                    aunEnInclusivoEjec--;
+                    if(aunEnInclusivoEjec==0){
+                        pthread_mutex_unlock(&mutexEjec);            //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Legislativo")){           //Cuando salga de Legislativo.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis 
+                    aunEnInclusivoLegis--;
+                    if(aunEnInclusivoLegis==0){
+                        pthread_mutex_unlock(&mutexLegis);           //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
+                }
+                else if(strstr(ArchivoIn, "Judicial")){              //Cuando salga de Judicial.acc, se decrementa la variable
+                    pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud 
+                    aunEnInclusivoJud--;
+                    if(aunEnInclusivoJud==0){
+                        pthread_mutex_unlock(&mutexJud);             //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
+                }
+                else{                                                //Cuando salga de otro Archivo, se decrementa la variable
+                    pthread_mutex_lock(&mutex5);                     //Bloqueamos el mutex5 para evitar inconsistencia en la variable aunEnInclusivoArchivo 
+                    aunEnInclusivoArchivo--;
+                    if(aunEnInclusivoArchivo==0){
+                        pthread_mutex_unlock(&mutexArchivo);         //Si es la ultima persona cerrandolo, se desbloquea para que Exclusivo pueda entrar
+                    }
+                    pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
+                }
+
+                free(ArchivoIn);
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
                 char* ArchivoEx = (char*)malloc(200);                 //Variable que tendra el nombre del archivo que se usara de manera Exclusiva
