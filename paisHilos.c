@@ -43,17 +43,21 @@ void delay(int delay){
 void deleteAccion(FILE* fp, char* newName, char* Accion){
     size_t len = 0;
     char* line;
+    size_t read;
     FILE* f = fopen("temp.txt", "w");
     
     while(getline(&line, &len, fp)!=-1){                                              //Itera por todas las lineas del archivo
         if(strstr(line, Accion)){                                                     //Si encuentra la accion, no la copia al archivo temporal
-            while(getline(&line, &len, fp)!=-1){                                      //Itera sobre los pasos de la accion
+            while(read = getline(&line, &len, fp)!=-1){                               //Itera sobre los pasos de la accion
                 if(strlen(line)<=2){                                                  //Cuando llegamos al final de la accion, volvemos a copiar linea por linea
                     break;
                 }
             }
-            if(getline(&line, &len, fp)==-1){                                         //Si la accion no copiada era la ultima en el archivo, sale del ciclo principal
+            if(!strstr(line, "\n")){                                                  //Si la accion no copiada era la ultima en el archivo, sale del ciclo principal
                 break;
+            }
+            else{
+                continue;
             }
         }
         fprintf(f, "%s", line);                                                       //Copia la linea a el archivo temporal leida del archivo
@@ -161,6 +165,7 @@ void *threadEjec(void *vargp)
             if((strstr(Decision, "aprobacion") || strstr(Decision, "reprobacion")) && cancel==FALSE){
                 char* to_who = (char*)malloc(200);                                                  //Quien debera recibir la señal para que apruebe/repruebe
                 strcpy(to_who, strtok(NULL,"\0"));
+                int num;                                                                            //variable que dira si se aprobo/reprobo la accion
                 //Tribunal Supremo aprueba
                 if(strstr(to_who, "Tribunal Supremo")){  
                     int tot=0;
@@ -169,7 +174,6 @@ void *threadEjec(void *vargp)
                         tot+=Magistrados[i];
                         i++;
                     }     
-                    int num;                                                                        //variable que dira si se aprobo/reprobo la accion
                     pthread_mutex_unlock(&mutexApro);                                               //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si requiere aprobacion
@@ -183,7 +187,6 @@ void *threadEjec(void *vargp)
                 }
                 //Presidente/Magistrados aprueban
                 else if(strstr(to_who, "Congreso")){
-                    int num;                                                                        //variable que dira si se aprobo/reprobo la accion
                     pthread_mutex_unlock(&mutexApro);                                               //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si requiere aprobacion
@@ -210,6 +213,7 @@ void *threadEjec(void *vargp)
                     if(strstr(Decision, "leer")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int leer = FALSE; 
+                        rewind(fInclusivo);
 
                         while(getline(&line, &len, fInclusivo)!=-1){
                             if(strstr(line, Decision)){
@@ -233,6 +237,8 @@ void *threadEjec(void *vargp)
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
+                        rewind(fInclusivo);
+
                         while(getline(&line, &len, fInclusivo)!=-1){
                             if(strstr(line, Decision)){
                                 anular = TRUE;
@@ -271,6 +277,7 @@ void *threadEjec(void *vargp)
                     if(strstr(Decision, "leer")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int leer = FALSE; 
+                        rewind(fExclusivo);
 
                         while(getline(&line, &len, fExclusivo)!=-1){
                             if(strstr(line, Decision)){
@@ -295,6 +302,8 @@ void *threadEjec(void *vargp)
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
+                        rewind(fExclusivo);
+
                         while(getline(&line, &len, fExclusivo)!=-1){
                             if(strstr(line, Decision)){
                                 anular = TRUE;
@@ -319,7 +328,7 @@ void *threadEjec(void *vargp)
                 }
                 free(ArchivoEx);                                                                     //Liberamos memoria de la variable
             }
-            else if(strstr(Decision, "exito") && rand()%101<=PorcentajeExitoEjec && cancel==FALSE){        //Si la accion es exitosa
+            else if(strstr(Decision, "exito") && (rand()%101<=PorcentajeExitoEjec) && cancel==FALSE){        //Si la accion es exitosa
                 exito=TRUE;                        
                 break;
             }
@@ -342,6 +351,7 @@ void *threadEjec(void *vargp)
         fclose(fp);                                                                       //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
         pthread_mutex_unlock(&mutexEjec);                                                 //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
         delay(10000);                                                                     //Hace delay para que le de chance a otros hilos de avanzar
+        sleep(1);
     } 
     pthread_exit(NULL);
 }
@@ -390,6 +400,7 @@ void *threadLegis(void *vargp)
                 day--;                                                            //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                               //Como ejecutivo ya no tiene acciones, se decrementa la variable
                 pthread_mutex_unlock(&mutex1);
+                pthread_mutex_unlock(&mutexLegis);                                //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
             if(!Encontro){
@@ -439,6 +450,7 @@ void *threadLegis(void *vargp)
                         cancel=TRUE;
                     }
                 }
+                free(to_who);
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
                 int lenght = ftell(fp);                                                                  //Obtiene el valor de la posicion (en bytes);                                           //Variable que contendra el numero de bytes desde el inicio del archivo inclusivo a la linea actual
@@ -452,6 +464,7 @@ void *threadLegis(void *vargp)
                     if(strstr(Decision, "leer")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int leer = FALSE; 
+                        rewind(fInclusivo);
 
                         while(getline(&line, &len, fInclusivo)!=-1){
                             if(strstr(line, Decision)){
@@ -474,6 +487,8 @@ void *threadLegis(void *vargp)
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
+                        rewind(fInclusivo);
+
                         while(getline(&line, &len, fInclusivo)!=-1){
                             if(strstr(line, Decision)){
                                 anular = TRUE;
@@ -511,6 +526,7 @@ void *threadLegis(void *vargp)
                     if(strstr(Decision, "leer")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int leer = FALSE; 
+                        rewind(fExclusivo);
 
                         while(getline(&line, &len, fExclusivo)!=-1){
                             if(strstr(line, Decision)){
@@ -535,6 +551,8 @@ void *threadLegis(void *vargp)
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
+                        rewind(fExclusivo);
+
                         while(getline(&line, &len, fExclusivo)!=-1){
                             if(strstr(line, Decision)){
                                 anular = TRUE;
@@ -550,20 +568,20 @@ void *threadLegis(void *vargp)
                     }
                     //Si la instruccion ya no es escribir/leer/anular
                     else{
-                        fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
+                        fseek(fp, lenght, SEEK_SET);                                                      //Mueve el apuntador fp a la linea anterior
                         fclose(fExclusivo);
                         abrirMutex(ArchivoEx);
                         break;
                     }
-                    lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
+                    lenght = ftell(fp);                                                                   //Obtiene el valor de la posicion (en bytes)
                 }
-                free(ArchivoEx);                                                                     //Liberamos memoria de la variable
+                free(ArchivoEx);                                                                          //Liberamos memoria de la variable
             }
-            else if(strstr(Decision, "exito") && rand()%2 == 1 && cancel==FALSE){                   //Si la accion es exitosa
+            else if(strstr(Decision, "exito") && (rand()%101<=PorcentajeExitoLegis) && cancel==FALSE){    //Si la accion es exitosa
                 exito=TRUE; 
                 break;
             }
-            else if(strstr(Decision, "fracaso")){                                                   //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                                         //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
@@ -630,6 +648,7 @@ void *threadJud(void *vargp)
                 day--;                                                        //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                           //Como ejecutivo ya no tiene acciones, se decrementa la variable
                 pthread_mutex_unlock(&mutex1);
+                pthread_mutex_unlock(&mutexJud);                              //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
             if(!Encontro){
@@ -688,6 +707,7 @@ void *threadJud(void *vargp)
                     if(strstr(Decision, "leer")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int leer = FALSE; 
+                        rewind(fInclusivo);
 
                         while(getline(&line, &len, fInclusivo)!=-1){                    //Si encuentra una linea que concuerde, no se anula la accion
                             if(strstr(line, Decision)){
@@ -710,6 +730,8 @@ void *threadJud(void *vargp)
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
+                        rewind(fInclusivo);
+
                         while(getline(&line, &len, fInclusivo)!=-1){                    //Si encuentra una linea que concuerde, se anula la accion
                             if(strstr(line, Decision)){
                                 anular = TRUE;
@@ -746,7 +768,8 @@ void *threadJud(void *vargp)
                     //Si la instruccion nos pide leer el archivo y encontrar una linea
                     if(strstr(Decision, "leer")){
                         strcpy(Decision, strtok(NULL,"\0"));
-                        int leer = FALSE; 
+                        int leer = FALSE;
+                        rewind(fExclusivo); 
 
                         while(getline(&line, &len, fExclusivo)!=-1){                    //Si encuentra una linea que concuerde, no se anula la accion
                             if(strstr(line, Decision)){
@@ -771,6 +794,8 @@ void *threadJud(void *vargp)
                     else if(strstr(Decision, "anular")){
                         strcpy(Decision, strtok(NULL,"\0"));
                         int anular = FALSE;
+                        rewind(fExclusivo);
+
                         while(getline(&line, &len, fExclusivo)!=-1){                    //Si se encuentra una linea que concuerde, se anula la accion
                             if(strstr(line, Decision)){
                                 anular = TRUE;

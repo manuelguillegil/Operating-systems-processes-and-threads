@@ -17,7 +17,7 @@ exito: acaba con la entrada libre! A partir de hoy, todos deberan tener pasaport
 fracaso: decide no reforzar la frontera: sigue valerse entrar sin pasaporte
 
 Ley de Visas
-aprobacion: Presidente
+reprobacion: Congreso
 exclusivo: normas de inmigracion.txt
 leer: Toda persona debe portar pasaporte
 escribir: Todo visitante debe llevar visa en su pasaporte
