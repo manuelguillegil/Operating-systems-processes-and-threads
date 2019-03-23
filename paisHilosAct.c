@@ -361,7 +361,7 @@ void *threadEjec(void *vargp)
                 rewind(fp);                                               //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
-                break;
+                break;                                                    //!!!!!!!!!!!!!!!!!!!!!!Tengo que ver porque puse esto aqui!!!!!!!!!!!!!!!!!!!!!!!!!!
             }
         }
         //Ahora ejecuta la accion
@@ -458,34 +458,34 @@ void *threadLegis(void *vargp)
 { 
     size_t len = 0;
     char* line;
-    int Encontro;                                                                     //Usado para ver cuando se encontro una accion
-    int vacio;
-    char toPrensa[200];                                                               //Mensaje que se envia a la prensa
-    char* Decision = (char*)calloc(1, 200);                                           //Se usa para revisar que que decision en la accion es
-    char* nombreAccion = (char*)calloc(1, 200);
-    int exito;                                                                        //Variable para evaluar si la accion fue exitosa o no
-    int cancel;
-    srand(time(0));
+    int Encontro;                                                                 //Usado para ver cuando se encontro una accion
+    int vacio;                                                                    //Entero que señalara si el archivo Legislativo.acc ya no tiene acciones
+    char toPrensa[200];                                                           //Mensaje que se envia a la prensa
+    char* Decision = (char*)calloc(1, 200);                                       //Se usa para revisar que que decision en la accion es
+    char* nombreAccion = (char*)calloc(1, 200);                                   //Variable que contendra el nombre de la accion actual
+    int exito;                                                                    //Variable para evaluar si la accion fue exitosa o no
+    int cancel;                                                                   //Se usara para cancelar la ejecucion de una accion
+    srand(time(0));                                                               //Seed del rand()
     FILE* fp;
 
     while(day-1<daysMax){
-        pthread_mutex_lock(&mutexLegis);
+        pthread_mutex_lock(&mutexLegis);                                          //Se bloquea el mutex ya que no se podra usar Legislativo.acc mientras ejecute una accion
 
         pthread_mutex_lock(&mutex1);
-        day++;                                                                        //Se aumenta el dia
+        day++;                                                                    //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
 
-        cancel = FALSE;
-        vacio = TRUE;
-        Encontro = FALSE;
+        cancel = FALSE;                                                           //
+        vacio = TRUE;                                                             //Inicializa las variables
+        Encontro = FALSE;                                                         //
         fp = fopen("Legislativo.acc", "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
             while(getline(&line, &len, fp) != -1){
-                if(strlen(line) > 2 && strchr(line, ':') == NULL){                   //Mientras la linea no sea un espacio, no contenga el caracter :
+                if(strlen(line) > 2 && strchr(line, ':') == NULL){                //Mientras la linea no sea un espacio, no contenga el caracter :
                     vacio = FALSE;
-                    if(rand()%5 == 1){                                               //y con una posibilidad de 20% de ser escogido
+                    if(rand()%5 == 1){                                            //y con una posibilidad de 20% de ser escogido
                         Encontro=TRUE;
                         strcpy(nombreAccion, line);
                         break;
@@ -493,18 +493,18 @@ void *threadLegis(void *vargp)
                 }
             }
             if(vacio==TRUE){
-                pthread_mutex_lock(&mutex1);
+                pthread_mutex_lock(&mutex1);                                      //Bloqueamos el mutex para evitar inconsistecia en day y aunTieneAcciones
                 day--;                                                            //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                               //Como ejecutivo ya no tiene acciones, se decrementa la variable
-                pthread_mutex_unlock(&mutex1);           
+                pthread_mutex_unlock(&mutex1);                                    //Desbloqueamos el mutex
                 free(Decision);                                                   //Liberamos memoria de la variable
                 free(nombreAccion);                                               //Liberamos memoria de la variable
                 pthread_mutex_unlock(&mutexLegis);                                //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
             if(!Encontro){
-                rewind(fp);
-            }
+                rewind(fp);                                                       //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
+            } 
             else{
                 break;
             }
@@ -514,18 +514,18 @@ void *threadLegis(void *vargp)
             strcpy(Decision,strtok(line," "));
             //La accion requiere aprobacion/reprobacion de otro poder
             if((strstr(Decision, "aprobacion") || strstr(Decision, "reprobacion")) && cancel==FALSE){
-                char* to_who = (char*)malloc(200);                              //Quien debera recibir la señal para que apruebe/repruebe
+                char* to_who = (char*)malloc(200);                                                  //Quien debera recibir la señal para que apruebe/repruebe
                 strcpy(to_who, strtok(NULL,"\0"));
                 int num;                                                                            //variable que dira si se aprobo/reprobo la accion
                 //Tribunal Supremo aprueba
                 if(strstr(to_who, "Tribunal Supremo")){  
                     int tot=0;
                     int i=0;
-                    while(Magistrados[i]!=0){
+                    while(Magistrados[i]!=0){                                                       //Se calcula la media aritmetica de los magistrados
                         tot+=Magistrados[i];
                         i++;
                     }                                                                           
-                    pthread_mutex_unlock(&mutexApro);
+                    pthread_mutex_unlock(&mutexApro);                                               //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si requiere aprobacion
                     if(strstr(Decision, "aprobacion") && (num > tot/numMagistrados)){               //Si no se aprueba, se cancela la accion
@@ -538,7 +538,7 @@ void *threadLegis(void *vargp)
                 }
                 //Presidente/Magistrados aprueban
                 else{
-                    pthread_mutex_unlock(&mutexAproEjec);
+                    pthread_mutex_unlock(&mutexAproEjec);                                           //Manda una señal a el hilo que aprueba
                     read(fdAproEjec[0], &num, sizeof(num));
                     //Si requiere aprobacion
                     if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoEjec)){              //Si no se aprueba, se cancela la accion
@@ -549,23 +549,23 @@ void *threadLegis(void *vargp)
                         cancel=TRUE;
                     }
                 }
-                free(to_who);
+                free(to_who);                                                                       //Liberamos espacio en memoria de la variable
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                char* ArchivoIn = (char*)malloc(200);
+                char* ArchivoIn = (char*)malloc(200);                                   //Nombre de el Archivo a abrir de manera inclusiva
                 strcpy(ArchivoIn, strtok(NULL,"\n"));
 
-                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);
+                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);                 //Llama a la funcion que se encarga de esta instruccion
 
-                free(ArchivoIn);
+                free(ArchivoIn);                                                        //Libera el espacio en memoria de la variable
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
-                char* ArchivoEx = (char*)malloc(200);
-                strcpy(ArchivoEx, strtok(NULL,"\n"));
+                char* ArchivoEx = (char*)malloc(200);                                   //Nombre de el Archivo a abrir de manera exclusiva
+                strcpy(ArchivoEx, strtok(NULL,"\n")); 
+ 
+                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);                 //Llama a la funcion que se encarga de esta instruccion
 
-                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);
-
-                free(ArchivoEx);                                                                     
+                free(ArchivoEx);                                                        //Libera el espacio en memoria de la variable
             }
             else if(strstr(Decision, "exito") && (rand()%101<=PorcentajeExitoLegis) && cancel==FALSE){    //Si la accion es exitosa
                 exito=TRUE; 
@@ -583,15 +583,17 @@ void *threadLegis(void *vargp)
             deleteAccion(fp, "Legislativo.acc", nombreAccion);
         }
         strcpy(toPrensa, "Congreso ");
-        strcat(toPrensa, Decision);
+        strcat(toPrensa, Decision);                                                      
         write(fd[1], toPrensa, sizeof(toPrensa));                                        //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
         pthread_mutex_unlock(&mutex);                                                    //Se libera el mutex
 
-        fclose(fp);
-        pthread_mutex_unlock(&mutexLegis);
-        delay(10000);
-    }
-    pthread_exit(NULL);
+        fclose(fp);                                                                      //Cierra el archivo Legislativo.acc
+        pthread_mutex_unlock(&mutexLegis);                                               //Desbloquea el mutex para que otros hilos usen Legislativo.acc
+        delay(10000);                                                                    //Hace delay para que le de chance a otros de poder usar Legislativo.acc
+    } 
+    free(Decision);                                                                      //Libera el espacio en memoria de la variable
+    free(toPrensa);                                                                      //Libera el espacio en memoria de la variable
+    pthread_exit(NULL);                                                                  //Termina la ejecucion del hilo
 }
 
 
@@ -637,14 +639,14 @@ void *threadJud(void *vargp)
                 pthread_mutex_lock(&mutex1);                                  //Bloquea el mutex para evitar inconsistencias al modificar la variable
                 day--;                                                        //Se decrementa el dia ya que no es encontro accion
                 aunTieneAcciones--;                                           //Como ejecutivo ya no tiene acciones, se decrementa la variable
-                pthread_mutex_unlock(&mutex1);
+                pthread_mutex_unlock(&mutex1);                                //Desbloquea el mutex
                 free(Decision);                                               //Liberamos memoria de la variable
                 free(nombreAccion);                                           //Liberamos memoria de la variable
                 pthread_mutex_unlock(&mutexJud);                              //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
                 pthread_exit(NULL);
             }
             if(!Encontro){
-                rewind(fp);                                                   //Si no encontro accion, el apuntador se devuelve al inicio del archivo
+                rewind(fp);                                                   //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
                 break;
@@ -688,20 +690,20 @@ void *threadJud(void *vargp)
                 free(to_who);                                                                        //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                char* ArchivoIn = (char*)malloc(200);
+                char* ArchivoIn = (char*)malloc(200);                                   //Nombre del archivo a abrir de manera inclusiva
                 strcpy(ArchivoIn, strtok(NULL,"\n"));
 
-                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);
+                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);                 //Se llama a la funcion que se encarga de esta instruccion
 
-                free(ArchivoIn);
+                free(ArchivoIn);                                                        //Libera el espacio en memoria de la variable
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
-                char* ArchivoEx = (char*)malloc(200);
+                char* ArchivoEx = (char*)malloc(200);                                   //Nombre del archivo a abrir de manera exclusiva
                 strcpy(ArchivoEx, strtok(NULL,"\n"));
 
-                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);
+                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);                 //Se llama a la funcion que se encarga de esta instruccion
 
-                free(ArchivoEx);                                                       
+                free(ArchivoEx);                                                        //Libera el espacio en memoria de la variable
             }
             else if(strstr(Decision, "exito") && cancel==FALSE){                        //Si la accion es exitosa  
                 int tot=0;
@@ -733,9 +735,11 @@ void *threadJud(void *vargp)
 
         fclose(fp);                                                                     //Cierra el archivo Judicial.acc
         pthread_mutex_unlock(&mutexJud);                                                //Desbloquea el mutex para que otros hilos usen Judicial.acc
-        delay(10000);                                                                   //Hace delay para que otros hilos usen el archivo Judicial.acc
+        delay(10000);                                                                   //Hace delay para que otros usen el archivo Judicial.acc
     }
-    pthread_exit(NULL);
+    free(Decision);                                                                     //Libera el espacio en memoria de la variable
+    free(toPrensa);                                                                     //Libera el espacio en memoria de la variable
+    pthread_exit(NULL);                                                                 //Termina la ejecucion del hilo
 }
 
 /*Este hilo se usara para las aprobaciones por parte del Ejecutivo. Hara aprobaciones cuando el Presidente este libre 
