@@ -111,8 +111,9 @@ void cerrarMutex(char* ArchivoEx){
 
 /*Esta funcion contiene la instruccion de abrir de manera exclusiva un Archivo y leer/anular/Escribir. 
 Es usada por los tres poderes*/
-int Exclusivo(FILE* fp, char* ArchivoEx, char* Decision, char* line, size_t len){
+int Exclusivo(FILE* fp, char* ArchivoEx, char* line, size_t len){
     int cancel = FALSE;
+    char* Decision = (char*)calloc(1, 200);
 
     cerrarMutex(ArchivoEx);                               //Bloquea el mutex requerido para usar el Arhcivo de manera exclusiva
 
@@ -175,11 +176,16 @@ int Exclusivo(FILE* fp, char* ArchivoEx, char* Decision, char* line, size_t len)
         }
         lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
     } 
+    free(Decision);
     return cancel;                                                                       //Regresa si la accion debe cancelarse o no.
 }
 
-int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len){
+/*Esta funcion contiene la instruccion de abrir de manera inclusiva un Archivo y leer/anular/Escribir. 
+Es usada por los tres poderes*/
+int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
     int cancel = FALSE;
+    char* Decision = (char*)calloc(1, 200);
+
     if(strstr(ArchivoIn, "Ejecutivo")){                  //Si se abrira Ejecutivo de manera inclusiva, aumentamos el contador 
         pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec
         aunEnInclusivoEjec++;
@@ -305,6 +311,7 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* Decision, char* line, size_t len)
         }
         pthread_mutex_unlock(&mutex5);                   //Desbloqueamos mutex5 ya que hicimos las modificaciones
     }
+    free(Decision);
     return cancel;                                       //Retorna si la accion debe cancelarse o no
 }
 
@@ -408,19 +415,19 @@ void *threadEjec(void *vargp)
             }
             //La accion pide usar un archivo de forma inclusiva
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                char* ArchivoIn = (char*)malloc(200);                                        //Nombre del archivo a ser abierto de manera inclusiva
+                char* ArchivoIn = (char*)calloc(1, 200);                                     //Nombre del archivo a ser abierto de manera inclusiva
                 strcpy(ArchivoIn, strtok(NULL,"\n"));
 
-                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);                      //Llama a la funcion que se encarga de esta instruccion
+                cancel = Inclusivo(fp, ArchivoIn, line, len);                                //Llama a la funcion que se encarga de esta instruccion
 
                 free(ArchivoIn);                                                             //Libera el espacio de memoria de la variable
             }
             //La accion pide usar un archivo de forma exclusiva
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
-                char* ArchivoEx = (char*)malloc(200);                                        //Nombre del archivo a ser abierto de manera exclusiva
+                char* ArchivoEx = (char*)calloc(1, 200);                                     //Nombre del archivo a ser abierto de manera exclusiva
                 strcpy(ArchivoEx, strtok(NULL,"\n"));
 
-                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);                      //Llama a la funcion que se encarga de esta instruccion
+                cancel = Exclusivo(fp, ArchivoEx, line, len);                                //Llama a la funcion que se encarga de esta instruccion
 
                 free(ArchivoEx);                                                             //Liberamos memoria de la variable
             }
@@ -552,18 +559,18 @@ void *threadLegis(void *vargp)
                 free(to_who);                                                                       //Liberamos espacio en memoria de la variable
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                char* ArchivoIn = (char*)malloc(200);                                   //Nombre de el Archivo a abrir de manera inclusiva
+                char* ArchivoIn = (char*)calloc(1, 200);                                //Nombre de el Archivo a abrir de manera inclusiva
                 strcpy(ArchivoIn, strtok(NULL,"\n"));
 
-                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);                 //Llama a la funcion que se encarga de esta instruccion
+                cancel = Inclusivo(fp, ArchivoIn, line, len);                           //Llama a la funcion que se encarga de esta instruccion
 
                 free(ArchivoIn);                                                        //Libera el espacio en memoria de la variable
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
-                char* ArchivoEx = (char*)malloc(200);                                   //Nombre de el Archivo a abrir de manera exclusiva
+                char* ArchivoEx = (char*)calloc(1, 200);                                //Nombre de el Archivo a abrir de manera exclusiva
                 strcpy(ArchivoEx, strtok(NULL,"\n")); 
  
-                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);                 //Llama a la funcion que se encarga de esta instruccion
+                cancel = Exclusivo(fp, ArchivoEx, line, len);                           //Llama a la funcion que se encarga de esta instruccion
 
                 free(ArchivoEx);                                                        //Libera el espacio en memoria de la variable
             }
@@ -592,7 +599,7 @@ void *threadLegis(void *vargp)
         delay(10000);                                                                    //Hace delay para que le de chance a otros de poder usar Legislativo.acc
     } 
     free(Decision);                                                                      //Libera el espacio en memoria de la variable
-    free(toPrensa);                                                                      //Libera el espacio en memoria de la variable
+    free(nombreAccion);                                                                  //Libera el espacio en memoria de la variable
     pthread_exit(NULL);                                                                  //Termina la ejecucion del hilo
 }
 
@@ -690,18 +697,18 @@ void *threadJud(void *vargp)
                 free(to_who);                                                                        //Liberamos memoria de la variable
             }
             else if(strstr(Decision, "inclusivo") && cancel==FALSE){
-                char* ArchivoIn = (char*)malloc(200);                                   //Nombre del archivo a abrir de manera inclusiva
+                char* ArchivoIn = (char*)calloc(1, 200);                                //Nombre del archivo a abrir de manera inclusiva
                 strcpy(ArchivoIn, strtok(NULL,"\n"));
 
-                cancel = Inclusivo(fp, ArchivoIn, Decision, line, len);                 //Se llama a la funcion que se encarga de esta instruccion
+                cancel = Inclusivo(fp, ArchivoIn, line, len);                           //Se llama a la funcion que se encarga de esta instruccion
 
                 free(ArchivoIn);                                                        //Libera el espacio en memoria de la variable
             }
             else if(strstr(Decision, "exclusivo") && cancel==FALSE){
-                char* ArchivoEx = (char*)malloc(200);                                   //Nombre del archivo a abrir de manera exclusiva
+                char* ArchivoEx = (char*)calloc(1, 200);                                //Nombre del archivo a abrir de manera exclusiva
                 strcpy(ArchivoEx, strtok(NULL,"\n"));
 
-                cancel = Exclusivo(fp, ArchivoEx, Decision, line, len);                 //Se llama a la funcion que se encarga de esta instruccion
+                cancel = Exclusivo(fp, ArchivoEx, line, len);                           //Se llama a la funcion que se encarga de esta instruccion
 
                 free(ArchivoEx);                                                        //Libera el espacio en memoria de la variable
             }
@@ -738,7 +745,7 @@ void *threadJud(void *vargp)
         delay(10000);                                                                   //Hace delay para que otros usen el archivo Judicial.acc
     }
     free(Decision);                                                                     //Libera el espacio en memoria de la variable
-    free(toPrensa);                                                                     //Libera el espacio en memoria de la variable
+    free(nombreAccion);                                                                 //Libera el espacio en memoria de la variable
     pthread_exit(NULL);                                                                 //Termina la ejecucion del hilo
 }
 
