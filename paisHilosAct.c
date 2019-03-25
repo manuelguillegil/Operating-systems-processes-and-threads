@@ -328,7 +328,7 @@ void destituirMagistrado(){
     }
   //  pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
 
-    FILE* fInclusivo = fopen("Legislativo.acc", "a+");        // Aquí siempre vamos abrir el Legislativo.acc
+    FILE* fInclusivo = fopen(direccionLegis, "a+");        // Aquí siempre vamos abrir el Legislativo.acc
     fprintf(fInclusivo, "\n"); 
 
     printf("%s\n", "luego de invocar destitucionMagistrado(). Se va a escribir en legislativo para destituirlo");
