@@ -251,6 +251,7 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
             strcpy(Decision, strtok(NULL,"\n"));
             fprintf(fInclusivo, "\n");                                                  //Escribe un newline
             fprintf(fInclusivo, "%s", Decision);                                        //Escribe la instruccion
+            fclose(fInclusivo);                                                         //Guardamos los cambios de la nueva línea agregada
         }
         //Si la instruccion nos pide leer el archivo y ver si no se encuentra una linea
         else if(strstr(Decision, "anular")){
@@ -313,6 +314,32 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
     }
     free(Decision);
     return cancel;                                       //Retorna si la accion debe cancelarse o no
+}
+
+void destituirMagistrado(){
+    printf("%s\n","Destituirmagistrado fue invocado");
+   // pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis
+    aunEnInclusivoLegis++;
+    if(aunEnInclusivoLegis==1){
+  //      pthread_mutex_lock(&mutexLegis);             //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
+    }
+  //  pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
+
+    FILE* fInclusivo = fopen("Legislativo.acc", "a+");        // Aquí siempre vamos abrir el Legislativo.acc
+    fprintf(fInclusivo, "\n"); 
+
+    printf("%s\n", "luego de invocar destitucionMagistrado(). Se va a escribir en legislativo para destituirlo");
+    fprintf(fInclusivo, "\n");                                                  //Escribe un newline
+    fprintf(fInclusivo, "%s", "Destituir Magistrado");                           //Escribe la instruccion de Destituir Magistrado
+
+    fclose(fInclusivo);
+
+   // pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis 
+    aunEnInclusivoLegis--;
+    if(aunEnInclusivoLegis==0){
+   //     pthread_mutex_unlock(&mutexLegis);           //Si es la ultima persona cerrandolo, se desbloquea el mutex para que otros puedan usar el Archivo
+    }
+  //  pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
 }
 
 /*Funcion Thread del Ejecutivo*/
@@ -535,12 +562,15 @@ void *threadLegis(void *vargp)
                     pthread_mutex_unlock(&mutexApro);                                               //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si requiere aprobacion
+
                     if(strstr(Decision, "aprobacion") && (num > tot/numMagistrados)){               //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
+                        destituirMagistrado();
                     }
                     //Si puede ser reprobado
                     else if(strstr(Decision, "reprobacion") && (num <= tot/numMagistrados)){        //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
+                        destituirMagistrado();
                     }
                 }
                 //Presidente/Magistrados aprueban
