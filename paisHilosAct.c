@@ -174,12 +174,12 @@ int Exclusivo(FILE* fp, char* ArchivoEx, char* line, size_t len){
         else{
             fseek(fp, lenght, SEEK_SET);                                                 //Mueve el apuntador fp a la linea anterior
             fclose(fExclusivo);                                                          //Cierra el archivo
-            abrirMutex(ArchivoEx);                                                       //Desbloquea el mutex que bloqueo al principio
             break;
         }
         lenght = ftell(fp);                                                              //Obtiene el valor de la posicion (en bytes)
     } 
     free(Decision);
+    abrirMutex(ArchivoEx);                                                       //Desbloquea el mutex que bloqueo al principio
     return cancel;                                                                       //Regresa si la accion debe cancelarse o no.
 }
 
@@ -320,29 +320,15 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
 }
 
 void destituirMagistrado(){
-    printf("%s\n","Destituirmagistrado fue invocado");
-   // pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis
-    aunEnInclusivoLegis++;
-    if(aunEnInclusivoLegis==1){
-  //      pthread_mutex_lock(&mutexLegis);             //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
-    }
-  //  pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
-
     FILE* fInclusivo = fopen(direccionLegis, "a+");        // Aquí siempre vamos abrir el Legislativo.acc
     fprintf(fInclusivo, "\n"); 
 
-    printf("%s\n", "luego de invocar destitucionMagistrado(). Se va a escribir en legislativo para destituirlo");
     fprintf(fInclusivo, "\n");                                                  //Escribe un newline
-    fprintf(fInclusivo, "%s", "Destituir Magistrado");                           //Escribe la instruccion de Destituir Magistrado
+    fprintf(fInclusivo, "%s\n", "Destituir Magistrado");                           //Escribe la instruccion de Destituir Magistrado
+    fprintf(fInclusivo, "%s\n", "exito: destituyó a un Magistrado"); 
+    fprintf(fInclusivo, "%s", "fracaso: no pudo destituir a un Magistrado");                   
 
     fclose(fInclusivo);
-
-   // pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis 
-    aunEnInclusivoLegis--;
-    if(aunEnInclusivoLegis==0){
-   //     pthread_mutex_unlock(&mutexLegis);           //Si es la ultima persona cerrandolo, se desbloquea el mutex para que otros puedan usar el Archivo
-    }
-  //  pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
 }
 
 /*Funcion Thread del Ejecutivo*/
@@ -568,12 +554,16 @@ void *threadLegis(void *vargp)
 
                     if(strstr(Decision, "aprobacion") && (num > tot/numMagistrados)){               //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
-                        destituirMagistrado();
+                        if(numMagistrados > 0) {
+                            destituirMagistrado();
+                        }
                     }
                     //Si puede ser reprobado
                     else if(strstr(Decision, "reprobacion") && (num <= tot/numMagistrados)){        //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
-                        destituirMagistrado();
+                        if(numMagistrados > 0) {
+                            destituirMagistrado();
+                        }
                     }
                 }
                 //Presidente/Magistrados aprueban
@@ -616,11 +606,13 @@ void *threadLegis(void *vargp)
                 break;
             }
         }
+
         strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje                          
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
         if(exito==TRUE){                                                                 //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, direccionLegis, nombreAccion);
+            exito = FALSE; 
         }
         strcpy(toPrensa, "Congreso ");
         strcat(toPrensa, Decision);                                                      
@@ -654,6 +646,10 @@ void *threadJud(void *vargp)
     while(day-1<daysMax){ 
         pthread_mutex_lock(&mutexJud);                                        //Se bloquea el mutex ya que no se podra usar Judicial.acc mientras ejecute una accion
 
+        if(numMagistrados == 0){                                           // Se disuelve el Tribunal Supremo por falta de Magistrados
+            pthread_mutex_unlock(&mutexJud);                              //Se desbloquea el mutex que se bloqueo al entrar a buscar acciones
+            pthread_exit(NULL);
+        }
         pthread_mutex_lock(&mutex1); 
         day++;                                                                //Se aumenta el dia
         pthread_mutex_unlock(&mutex1);
@@ -833,9 +829,20 @@ void *threadPrensa(void *vargp)
         else{
             printf("%d.%s\n\n", print, toPrensa); 
         }
+
+        if(strstr(toPrensa,"destituyó a un Magistrado")) { 
+            if(numMagistrados > 0) {            // Si fue un exito la destitución de un magistrado, se elimina uno
+                numMagistrados--;
+                printf("%s\n" "%d\n","Se bajó el número de magistrados", numMagistrados);
+            }
+        }
+
         strcpy(Hemeroteca[print-1], toPrensa);                                        //Coloca el mensaje en la Hemeroteca
         memset(toPrensa, 0, sizeof(toPrensa));                                        //Se vacia toPrensa
         print++;
+
+    
+
     }
     close(fd[0]);                                                                     //Cuando termina, cierra el lado Read del pipe
     close(fd[1]);                                                                     //Tambien cierra el lado write del pipe
