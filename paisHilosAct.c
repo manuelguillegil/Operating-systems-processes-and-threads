@@ -25,6 +25,9 @@ int numMagistrados = 8;                                                       //
 int Magistrados[20];                                                          //Array con las probabilidades de exito de cada magistrado
 int PorcentajeExitoEjec = 66;                                                 //Probabilidad de exito de Ejecutivo
 int PorcentajeExitoLegis = 66;                                                //Probabilidad de exito de Legislativo
+char* direccionEjec;                                                          //
+char* direccionLegis;                                                         //Direccion de los archivos de cada Poder
+char* direccionJud;                                                           //
 pthread_mutex_t mutex;                                                        //Mutex que se usa para el pipe entre hilos y la prensa
 pthread_mutex_t mutex1;                                                       //Mutex que se usa para modificar day
 pthread_mutex_t mutex2;                                                       //Mutex que se usa para modificar la variable aunEnInlcusivoEjec
@@ -94,15 +97,15 @@ void abrirMutex(char* ArchivoEx){
 void cerrarMutex(char* ArchivoEx){
     if(strstr(ArchivoEx, "Legislativo.acc")){
         pthread_mutex_lock(&mutexLegis);
-        strcpy(ArchivoEx, "Legislativo.acc");
+        strcpy(ArchivoEx, direccionLegis);
     }
     else if(strstr(ArchivoEx, "Judicial.acc")){
         pthread_mutex_lock(&mutexJud);
-        strcpy(ArchivoEx, "Judicial.acc");
+        strcpy(ArchivoEx, direccionJud);
     }
     else if(strstr(ArchivoEx, "Ejecutivo.acc")){
         pthread_mutex_lock(&mutexEjec);
-        strcpy(ArchivoEx, "Ejecutivo.acc");
+        strcpy(ArchivoEx, direccionEjec);
     }
     else{
         pthread_mutex_lock(&mutexArchivo);
@@ -189,8 +192,8 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
     if(strstr(ArchivoIn, "Ejecutivo")){                  //Si se abrira Ejecutivo de manera inclusiva, aumentamos el contador 
         pthread_mutex_lock(&mutex2);                     //Bloqueamos el mutex2 para evitar inconsistencia en la variable aunEnInclusivoEjec
         aunEnInclusivoEjec++;
+        strcpy(ArchivoIn, direccionEjec);
         if(aunEnInclusivoEjec==1){
-            strcpy(ArchivoIn, "Ejecutivo.acc");
             pthread_mutex_lock(&mutexEjec);              //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
         }
         pthread_mutex_unlock(&mutex2);                   //Desbloqueamos mutex2 ya que hicimos las modificaciones
@@ -198,8 +201,8 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
     else if(strstr(ArchivoIn, "Legislativo")){           //Si se abrira Legislativo de manera inclusiva, aumentamos el contador 
         pthread_mutex_lock(&mutex3);                     //Bloqueamos el mutex3 para evitar inconsistencia en la variable aunEnInclusivoLegis
         aunEnInclusivoLegis++;
+        strcpy(ArchivoIn, direccionLegis);
         if(aunEnInclusivoLegis==1){
-            strcpy(ArchivoIn, "Legislativo.acc");
             pthread_mutex_lock(&mutexLegis);             //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
         }
         pthread_mutex_unlock(&mutex3);                   //Desbloqueamos mutex3 ya que hicimos las modificaciones
@@ -207,8 +210,8 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
     else if(strstr(ArchivoIn, "Judicial")){              //Si se abrira Judicial de manera inclusiva, aumentamos el contador 
         pthread_mutex_lock(&mutex4);                     //Bloqueamos el mutex4 para evitar inconsistencia en la variable aunEnInclusivoJud
         aunEnInclusivoJud++;
+        strcpy(ArchivoIn, direccionJud);
         if(aunEnInclusivoJud==1){
-            strcpy(ArchivoIn, "Judicial.acc");
             pthread_mutex_lock(&mutexJud);               //Si es la primera persona abriendolo, se bloquea para que Exclusivo no pueda entrar
         }
         pthread_mutex_unlock(&mutex4);                   //Desbloqueamos mutex4 ya que hicimos las modificaciones
@@ -367,7 +370,7 @@ void *threadEjec(void *vargp)
         cancel = FALSE;                                                   //
         vacio = TRUE;                                                     //Inicializa las variables
         Encontro = FALSE;                                                 //
-        fp = fopen("Ejecutivo.acc", "r");
+        fp = fopen(direccionEjec, "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
@@ -471,7 +474,7 @@ void *threadEjec(void *vargp)
         pthread_mutex_lock(&mutex);                                           //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
         if(exito==TRUE){                                                      //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
-            deleteAccion(fp, "Ejecutivo.acc", nombreAccion);
+            deleteAccion(fp, direccionEjec, nombreAccion);
         }
         strcpy(toPrensa, "Presidente ");
         strcat(toPrensa, Decision);
@@ -512,7 +515,7 @@ void *threadLegis(void *vargp)
         cancel = FALSE;                                                           //
         vacio = TRUE;                                                             //Inicializa las variables
         Encontro = FALSE;                                                         //
-        fp = fopen("Legislativo.acc", "r");
+        fp = fopen(direccionLegis, "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
@@ -617,7 +620,7 @@ void *threadLegis(void *vargp)
         pthread_mutex_lock(&mutex);                                                      //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
         if(exito==TRUE){                                                                 //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
-            deleteAccion(fp, "Legislativo.acc", nombreAccion);
+            deleteAccion(fp, direccionLegis, nombreAccion);
         }
         strcpy(toPrensa, "Congreso ");
         strcat(toPrensa, Decision);                                                      
@@ -658,7 +661,7 @@ void *threadJud(void *vargp)
         cancel = FALSE;                                                       //
         Encontro = FALSE;                                                     //Inicializa variables
         vacio = TRUE;                                                         //
-        fp = fopen("Judicial.acc", "r");
+        fp = fopen(direccionJud, "r");
 
         //Encuentra una accion, con 20% de probabilidad
         while(TRUE){
@@ -763,7 +766,7 @@ void *threadJud(void *vargp)
         pthread_mutex_lock(&mutex);                                                     //Para evitar inconsistencia en el pipe, se debe tratar como Seccion Critica
         if(exito==TRUE){                                                                //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
-            deleteAccion(fp, "Judicial.acc", nombreAccion);
+            deleteAccion(fp, direccionJud, nombreAccion);
         }
         strcpy(toPrensa, "Tribunal Supremo ");
         strcat(toPrensa, Decision);
@@ -841,6 +844,11 @@ void *threadPrensa(void *vargp)
 
 void main(int argc, char *argv[]){
 
+    if(argc < 2){
+        printf("Faltan argumentos\n");
+        exit(1);
+    }
+
     memset(Magistrados, 0, sizeof(Magistrados));
     for(int i=0; i<8; i++){                                                           //Inicializa los 8 magistrados
         Magistrados[i] = 66;
@@ -849,6 +857,23 @@ void main(int argc, char *argv[]){
     daysMax = atoi(argv[1]); 
     if(daysMax<=0){      
         exit(1);
+    }
+
+    direccionEjec = (char*)calloc(1, 200);
+    direccionLegis = (char*)calloc(1, 200);
+    direccionJud = (char*)calloc(1, 200);
+    if(argc>=3){
+        strcpy(direccionEjec, (char*)argv[2]);
+        strcpy(direccionLegis, (char*)argv[2]);
+        strcpy(direccionJud, (char*)argv[2]);
+        strcat(direccionEjec, "Ejecutivo.acc");
+        strcat(direccionLegis, "Legislativo.acc");
+        strcat(direccionJud, "Judicial.acc");
+    }
+    else{
+        strcpy(direccionEjec, "Ejecutivo.acc");
+        strcpy(direccionLegis, "Legislativo.acc");
+        strcpy(direccionJud, "Judicial.acc");
     }
 
     pthread_t thread_aprobacion;                                                      //hilo que se encarga de la aprobacion de Judicial y Legislativo
@@ -882,5 +907,8 @@ void main(int argc, char *argv[]){
         pthread_cancel(thread_id_prensa);                                             //Si los poderes se quedaron sin acciones antes de terminar los dias, se cancela a la Prensa
         pthread_cancel(thread_aprobacion);                                            //Y a los hilos de aprobaciones
     }
-    pthread_join(thread_id_prensa, NULL);                                             
+    pthread_join(thread_id_prensa, NULL);   
+    free(direccionEjec);     
+    free(direccionLegis); 
+    free(direccionJud);                                      
 }
