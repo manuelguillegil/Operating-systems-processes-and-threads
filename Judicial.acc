@@ -1,5 +1,5 @@
 Impuesto Unitario
-exclusivo: Ejecutivo.acc
+inclusivo: Ejecutivo.acc
 escribir: Recaudar impuesto
 escribir: asignar: Ministerio de Finanzas
 escribir: exito: logra recaudar sin inconvenientes
@@ -18,7 +18,7 @@ fracaso: decide no reforzar la frontera: sigue valerse entrar sin pasaporte
 
 Ley de Visas
 aprobacion: Presidente
-exclusivo: normas de inmigracion.txt
+inclusivo: normas de inmigracion.txt
 leer: Toda persona debe portar pasaporte
 escribir: Todo visitante debe llevar visa en su pasaporte
 exclusivo: Ejecutivo.acc
