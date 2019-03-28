@@ -319,6 +319,33 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len){
     return cancel;                                       //Retorna si la accion debe cancelarse o no
 }
 
+void disolverCongreso(){
+    FILE* fInclusivo = fopen(direccionEjec, "a+");        
+    fprintf(fInclusivo, "\n"); 
+
+    fprintf(fInclusivo, "\n");                                                  //Escribe un newline
+    fprintf(fInclusivo, "%s\n", "Disolver Congreso");                           //Escribe la instruccion de Destituir Magistrado
+    fprintf(fInclusivo, "%s\n", "aprobacion: Congreso");   
+    fprintf(fInclusivo, "%s\n", "exito: disolvió el Congreso"); 
+    fprintf(fInclusivo, "%s", "fracaso: falla en disolver el Congreso");                   
+
+    fclose(fInclusivo);
+}
+
+
+void censurarPresidente(){
+    FILE* fInclusivo = fopen(direccionLegis, "a+");        // Aquí siempre vamos abrir el Legislativo.acc
+    fprintf(fInclusivo, "\n"); 
+
+    fprintf(fInclusivo, "\n");                                                  //Escribe un newline
+    fprintf(fInclusivo, "%s\n", "Censurar Presidente");                           //Escribe la instruccion de Destituir Magistrado
+    fprintf(fInclusivo, "%s\n", "aprobacion: Tribunal Supremo");   
+    fprintf(fInclusivo, "%s\n", "exito: censuró al Presidente. Ahora se tiene que llevar a cabo unas nuevas elecciones"); 
+    fprintf(fInclusivo, "%s", "fracaso: falló en su intento de censurar al Presidente");                   
+
+    fclose(fInclusivo);
+}
+
 void destituirMagistrado(){
     FILE* fInclusivo = fopen(direccionLegis, "a+");        // Aquí siempre vamos abrir el Legislativo.acc
     fprintf(fInclusivo, "\n"); 
@@ -414,17 +441,19 @@ void *threadEjec(void *vargp)
                         cancel=TRUE;
                     }
                 }
-                //Presidente/Magistrados aprueban
+                //Congreso aprueba
                 else if(strstr(to_who, "Congreso")){
                     pthread_mutex_unlock(&mutexApro);                                               //Manda una señal a el hilo que aprueba
                     read(fdApro[0], &num, sizeof(num));
                     //Si requiere aprobacion
                     if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoLegis)){             //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
+                        disolverCongreso();
                     }
                     //Si puede ser reprobado
                     else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoLegis)){      //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
+                        disolverCongreso();
                     }
                 }
                 free(to_who);                                                                       //Se libera el espacio de memoria de la variable
@@ -555,14 +584,14 @@ void *threadLegis(void *vargp)
                     if(strstr(Decision, "aprobacion") && (num > tot/numMagistrados)){               //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
                         if(numMagistrados > 0) {
-                            destituirMagistrado();
+                   //         destituirMagistrado();
                         }
                     }
                     //Si puede ser reprobado
                     else if(strstr(Decision, "reprobacion") && (num <= tot/numMagistrados)){        //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
                         if(numMagistrados > 0) {
-                            destituirMagistrado();
+                 //           destituirMagistrado();
                         }
                     }
                 }
@@ -573,10 +602,12 @@ void *threadLegis(void *vargp)
                     //Si requiere aprobacion
                     if(strstr(Decision, "aprobacion") && (num > PorcentajeExitoEjec)){              //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
+                   //     censurarPresidente();
                     }
                     //Si puede ser reprobado
                     else if(strstr(Decision, "reprobacion") && (num <= PorcentajeExitoEjec)){       //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
+                    //    censurarPresidente();
                     }
                 }
                 free(to_who);                                                                       //Liberamos espacio en memoria de la variable
@@ -830,12 +861,16 @@ void *threadPrensa(void *vargp)
             printf("%d.%s\n\n", print, toPrensa); 
         }
 
-        if(strstr(toPrensa,"destituyó a un Magistrado")) { 
-            if(numMagistrados > 0) {            // Si fue un exito la destitución de un magistrado, se elimina uno
-                numMagistrados--;
-                printf("%s\n" "%d\n","Se bajó el número de magistrados", numMagistrados);
-            }
-        }
+  //      if(strstr(toPrensa,"destituyó a un Magistrado")) { 
+  //          if(numMagistrados > 0) {            // Si fue un exito la destitución de un magistrado, se elimina uno
+  //              numMagistrados--;
+  //              printf("%s\n" "%d\n","Se bajó el número de magistrados", numMagistrados);
+  //          }
+  //      }
+
+  //      if(strstr(toPrensa,"censuró al Presidente")) { 
+  //          printf("%s", " Se censuró el presidente panita");
+  //      }
 
         strcpy(Hemeroteca[print-1], toPrensa);                                        //Coloca el mensaje en la Hemeroteca
         memset(toPrensa, 0, sizeof(toPrensa));                                        //Se vacia toPrensa
