@@ -522,7 +522,7 @@ void *threadEjec(void *vargp)
 
         fclose(fp);                                                           //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
         pthread_mutex_unlock(&mutexEjec);                                     //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
-        delay(100000);                                                         //Hace delay para que le de chance a otros hilos de avanzar
+        delay(10000);                                                         //Hace delay para que le de chance a otros hilos de avanzar
     } 
     free(Decision);                                                           //Libera el espacio en memoria de la variable
     free(nombreAccion);                                                       //Libera el espacio en memoria de la variable
