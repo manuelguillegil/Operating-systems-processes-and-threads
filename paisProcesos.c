@@ -14,18 +14,20 @@
 #define FALSE 0
 
 int fd[2];                                                                    //Pipe entre subprocesos y prensa
-int fd1[2];                                                                   //Pipe entre subprocesos para compartir variable day
 int fd2[2];                                                                   //Pipe entre subprocesos para compartir el array Magistrados
 int fdApro[2];                                                                //Pipe para enviar la aprobacion/reprobacion
 int fdAproEjec[2];                                                            //Pipe para enviar la aprobacion/reprobacion de Ejecutivo
 
-int day=0;                                                                    //Inicializa la variable day que cuenta en que dia esta
+int *day;                                                                     //Variable day que cuenta cuantos dias lleva la simulacion
 int daysMax;                                                                  //int que indica cual es el dia maximo 
 char* direccionEjec;                                                          //
 char* direccionLegis;                                                         //Direccion de los archivos de cada Poder
 char* direccionJud;                                                           //
-int aunTieneAcciones = 3;  
-int *numMagistrados;                                                          //Numero de magistrados actualmente
+int* aunTieneAcciones;                                                        //Entero que indica cuantos poderes aun tienen acciones disponibles
+int* nombraMagistradoCongreso;                                                //Variable que se usa para decirle al Congreso que el debe nombrar al nuevo Magistrado
+int* censurado;                                                               //Variable usada para avisarle al Presidente que fue censurado
+int* disuelto;                                                                //Variable usada para avisarle al Congreso que fue disuelto
+int* numMagistrados;                                                          //Numero de magistrados actualmente
 int Magistrados[20];                                                          //Array con las probabilidades de exito de cada magistrado
 int* PorcentajeExitoEjec;                                                     //Probabilidad de exito de Ejecutivo
 int* PorcentajeExitoLegis;                                                    //Probabilidad de exito de Legislativo
@@ -311,13 +313,53 @@ int Inclusivo(FILE* fp, char* ArchivoIn, char* line, size_t len, sem_t* semEjec,
     return cancel;                                       //Regresa si la accion debe cancelarse o no
 }
 
+/*Funcion llamada por Legislativo cuando el Tribunal no aprueba una accion del Congreso*/
+void accionDestituirMagistrado(){
+    FILE* fLegis = fopen(direccionLegis, "a");
+    fprintf(fLegis, "\n\n");
+    fprintf(fLegis, "Destituir Magistrado\n");
+    fprintf(fLegis, "destituir: Magistrado\n");
+    fprintf(fLegis, "exito: destituyo un Magistrado\n");
+    fprintf(fLegis, "fracaso: fracaso en destituir un Magistrado");
+    fclose(fLegis);
+}
+
+/*Funcion que se llama cuando se quiere revisar los archivos de plan de gobierno para ver que acciones
+conservar y cuales desechar cuando ocurre una Censura del presiente o se disuelve el Congreso*/
+void accionesConservadas(FILE* fp, char* temp, char* newName, int Porcentaje){
+    size_t len = 0;
+    char* line;
+    FILE* f = fopen(temp, "w");
+    srand(time(0));
+    
+    while(getline(&line, &len, fp)!=-1){                                                           //Itera por todas las lineas del archivo
+        if(strlen(line) > 2 && strchr(line, ':') == NULL && rand()%101 > Porcentaje){              //Si encuentra una accion y decide quitarla del plan
+            while(getline(&line, &len, fp)!=-1){                                                   //Itera sobre los pasos de la accion
+                if(strlen(line)<=2){                                                               //Cuando llegamos al final de la accion
+                    break;
+                }
+            }
+            if(!strstr(line, "\n")){                                                               //Si la accion no copiada era la ultima en el archivo
+                break;
+            }
+            else{
+                continue;
+            }
+        }
+        fprintf(f, "%s", line);                                                                    //Copia la linea a el archivo temporal leida del archivo
+    }
+    fclose(f);                                                                                     //cierra f
+    rename(temp, newName);                                                                         //Renombra el archivo temporal para aplicar los cambios al archivo original
+}
+
 void Ejecutivo() 
 {   
+    sem_t* semDay=sem_open("SemDay", O_CREAT, 0666, 1);                   //
     sem_t* semApro=sem_open("Aprobacion", O_CREAT, 0666, 0);              //
     sem_t* semEjec=sem_open("Ejecutivo", O_CREAT, 0666, 1);               //
     sem_t* semLegis=sem_open("Legislativo", O_CREAT, 0666, 1);            //
-    sem_t* semJud=sem_open("Judicial", O_CREAT, 0666, 1);                 //
-    sem_t* semArchivo=sem_open("Archivo", O_CREAT, 0666, 1);              //Inicializa los semaforos que se comparte entre proceso y de este proceso 
+    sem_t* semJud=sem_open("Judicial", O_CREAT, 0666, 1);                 //Inicializa los semaforos que se comparte entre proceso y de este proceso 
+    sem_t* semArchivo=sem_open("Archivo", O_CREAT, 0666, 1);              //
     sem_t* semMutex=sem_open("Mutex", O_CREAT, 0666, 1);                  //
     sem_t* semMutex2=sem_open("Mutex2", O_CREAT, 0666, 1);                //
     sem_t* semMutex3=sem_open("Mutex3", O_CREAT, 0666, 1);                //
@@ -332,22 +374,32 @@ void Ejecutivo()
     char* nombreAccion = (char*)calloc(1, 200);                           //Variable que contendra el nombre de la accion actual
     int exito;                                                            //Variable para evaluar si la accion fue exitosa o no
     int cancel;                                                           //Se usara para cancelar la ejecucion de una accion
+    int nombra;                                                           //Variable que dira si la accion nombra a un Magistrado o no
+    int disolver;
     srand(time(0));                                                       //Seed del rand()
     FILE* fp;                                                             
 
-    while(TRUE){
+    while(*day-1<daysMax){
         sem_wait(semEjec);                                                //Se bloquea el semaforo ya que no se podra usar Ejecutivo.acc mientras ejecute una accion
 
-        read(fd1[0], &day, sizeof(day));                                  //Se lee el valor actualizado de day
-        day++;                                                            //Se aumenta el dia
-        write(fd1[1], &day, sizeof(day));                                 //Se actualiza el valor de day para todos los subprocesos
-        if(day-1>=daysMax){                                               //Si se completaron los dias de ejecucion, se para el subproceso
-            return;
-        }
+        if(*censurado == TRUE){                                                                //Si el presidente fue censurado
+            *censurado = FALSE;
+            *PorcentajeExitoEjec = rand()%101;                                                 //Calcula nuevo Porcentaje de Exito del Presidente
+            fp = fopen(direccionEjec, "r");
+            accionesConservadas(fp, "tempEjec.acc", direccionEjec, *PorcentajeExitoEjec);      //Se revisa que acciones conserva y cuales Desecha
+            fclose(fp);                                                                        //Cierra el archivo
+        }    
+
+        sem_wait(semDay);
+        *day = *day + 1;                                                  //Se aumenta el dia
+        sem_post(semDay);
 
         vacio = TRUE;                                                     //
-        Encontro = FALSE;                                                 //Inicializa las variables
-        cancel = FALSE;                                                   //
+        Encontro = FALSE;                                                 //
+        cancel = FALSE;                                                   //Inicializa las variables
+        nombra = FALSE;                                                   //
+        exito = FALSE;                                                    //
+        disolver = FALSE;                                                 //
         fp = fopen(direccionEjec, "r");
 
         //Encuentra una accion, con 20% de probabilidad
@@ -363,9 +415,10 @@ void Ejecutivo()
                 }
             }
             if(vacio==TRUE){                                              //Si el archivo de entrada esta vacio
-                read(fd1[0], &day, sizeof(day));
-                day--;                                                    //Se decrementa el dia ya que no es encontro accion
-                write(fd1[1], &day, sizeof(day));
+                sem_wait(semDay);
+                *day = *day - 1;                                          //Se decrementa el dia ya que no es encontro accion
+                *aunTieneAcciones = *aunTieneAcciones - 1;
+                sem_post(semDay);
                 free(Decision);                                           //Liberamos espacio de memoria de la variable
                 free(nombreAccion);                                       //Liberamos espacio de memoria de la variable
                 sem_post(semEjec);                                        //Se desbloquea el semaforo que se bloqueo al entrar a buscar acciones
@@ -439,24 +492,64 @@ void Ejecutivo()
 
                 free(ArchivoEx);                                                                    //Liberamos espacio de memoria de la variable
             }
-            else if(strstr(Decision, "exito") && (rand()%101<=*PorcentajeExitoEjec) && cancel==FALSE){      //Si la accion es exitosa
+            else if(strstr(Decision, "nombrar") && cancel==FALSE){                                  //Si la accion pide nombrar a alguien
+                strcpy(Decision, strtok(NULL, "\n"));
+                int num;
+                if(strstr(Decision, "Magistrado")){                                                 //Si pide nombrar a un Magistrado
+                    nombra = TRUE;
+                    sem_post(semApro);                                                              //Se pide la aprobacion del congreso
+                    read(fdApro[0], &num, sizeof(num));             
+                    if(num<=*PorcentajeExitoLegis){                                                 //Si es afirmativa, se nombra un nuevo Magistrado
+                        read(fd2[0], Magistrados, 20*sizeof(int)); 
+                        Magistrados[*numMagistrados] = rand()%101;
+                        write(fd2[1], Magistrados, 20*sizeof(int));                                 //Actualiza el array de Magistrados
+                        *numMagistrados = *numMagistrados + 1;
+                        exito = TRUE;                                                               //Si es afirmativa, decimos que la accion fue exitosa
+                    }
+                    else{
+                        cancel = TRUE;                                                              //Si es negativa, la accion fracasa
+                        *nombraMagistradoCongreso = TRUE;
+                    }
+                }
+            }
+            else if(strstr(Decision, "disolver") && cancel==FALSE){                                 //Si la accion pide disolver a el Congreso
+                strcpy(Decision, strtok(NULL, "\n"));
+                int num;
+                sem_post(semApro);                                                                  //Se pide la aprobacion del congreso
+                read(fdApro[0], &num, sizeof(num));
+                if(num > *PorcentajeExitoLegis){
+                    disolver = TRUE;                                                                //Se quiere disolver en esta accion
+                }
+                else{
+                    cancel = TRUE;
+                }
+            }
+            else if((strstr(Decision, "exito") && (rand()%101<=*PorcentajeExitoEjec) && cancel==FALSE) || exito==TRUE){      //Si la accion es exitosa
                 exito=TRUE;                        
+                if(disolver == TRUE){                                                               //Si la accion es exitosa y esta disuelve el Congreso                           
+                    *disuelto = TRUE;
+                }
                 break;
             }
-            else if(strstr(Decision, "fracaso")){                                                           //Si la accion fracaza
+            else if(strstr(Decision, "fracaso")){                                                                            //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
+
+            if(*censurado == TRUE){                                                //Si el Presidente fue censurado, se detiene en la accion
+                break;
+            }
         }
-        strcpy(Decision, strtok(NULL,"\0"));                                       //Toma el resto de el mensaje  
-                                       
-        if(exito==TRUE){                                                           //Si la accion es exitosa, se elimina de el archivo
-            rewind(fp);
-            deleteAccion(fp, direccionEjec, nombreAccion, "temp1.txt");
+        if(*censurado == FALSE){
+            strcpy(Decision, strtok(NULL,"\0"));                                       //Toma el resto de el mensaje         
+            if(exito==TRUE || nombra==TRUE){                                           //Si la accion es exitosa o nombra a un magistrado, se elimina de el archivo
+                rewind(fp);
+                deleteAccion(fp, direccionEjec, nombreAccion, "temp1.txt");
+            }
+            strcpy(toPrensa, "Presidente ");
+            strcat(toPrensa, Decision);
+            write(fd[1], toPrensa, sizeof(toPrensa));                                  //Se escribe la el mensaje de exito/fracaso al pipe que conecta este subproceso con la prensa
         }
-        strcpy(toPrensa, "Presidente ");
-        strcat(toPrensa, Decision);
-        write(fd[1], toPrensa, sizeof(toPrensa));                                  //Se escribe la el mensaje de exito/fracaso al pipe que conecta este subproceso con la prensa
         
         fclose(fp);                                                                //Cierra el archivo para abrirlo nuevamente cuando se reinicie el ciclo
         sem_post(semEjec);                                                         //Se desbloquea para poder hacer cambios a Ejecutivo.acc o hacer aprobaciones
@@ -468,8 +561,9 @@ void Ejecutivo()
 }
 
 
-void Legislativo() 
+void Legislativo(int option) 
 {   
+    sem_t* semDay=sem_open("SemDay", O_CREAT, 0666, 1);                   //
     sem_t* semAproEje=sem_open("AprobacionEjec", O_CREAT, 0666, 0);       // 
     sem_t* semApro=sem_open("Aprobacion", O_CREAT, 0666, 0);              //
     sem_t* semEjec=sem_open("Ejecutivo", O_CREAT, 0666, 1);               // 
@@ -480,6 +574,15 @@ void Legislativo()
     sem_t* semMutex2=sem_open("Mutex2", O_CREAT, 0666, 1);                // 
     sem_t* semMutex3=sem_open("Mutex3", O_CREAT, 0666, 1);                //
     sem_t* semMutex4=sem_open("Mutex4", O_CREAT, 0666, 1);                //
+ 
+    if(option==1){                                                                               //Si debe escoger nuevo plan y Porcentaje de exito
+        sem_wait(semLegis);
+        *PorcentajeExitoLegis = rand()%101;                                                      //Calcula nuevo Porcentaje de Exito del Congreso
+        FILE* fp = fopen(direccionLegis, "r");
+        accionesConservadas(fp, "tempLegis.acc", direccionLegis, *PorcentajeExitoLegis);         //Se revisa que acciones conserva y cuales desecha
+        fclose(fp);
+        sem_post(semLegis);
+    }
 
     size_t len = 0;
     char* line;
@@ -490,22 +593,32 @@ void Legislativo()
     char* nombreAccion = (char*)calloc(1, 200);                           //Variable que contendra el nombre de la accion actual
     int exito;                                                            //Variable para evaluar si la accion fue exitosa o no
     int cancel;                                                           //Se usara para cancelar la ejecucion de una accion
+    int censurar;                                                         //
     srand(time(0));                                                       //Seed del rand()
+    int destitucion;
     FILE* fp;
 
-    while(TRUE){
-        sem_wait(semLegis);                                               //Se bloquea el mutex ya que no se podra usar Legislativo.acc mientras ejecute una accion
+    while(*day-1<daysMax){
 
-        read(fd1[0], &day, sizeof(day));                                  //Se lee el valor actualizado de day
-        day++;                                                            //Se aumenta el dia
-        write(fd1[1], &day, sizeof(day));                                 //Se actualiza el valor de day para todos los subprocesos
-        if(day-1>=daysMax){                                               //Si se completaron los dias de ejecucion, se para el subproceso
-            return;
+        if(*nombraMagistradoCongreso==TRUE){                              //Si al congreso le toca nombrar un magistrado, se mantiene ocupado escogiendo
+            read(fd2[0], Magistrados, 20*sizeof(int));                    //...su probabilidad de exito
+            Magistrados[*numMagistrados] = rand()%101;
+            write(fd2[1], Magistrados, 20*sizeof(int));                   //Se actualiza el Array de Magistrados
+            *numMagistrados = *numMagistrados + 1;                        //Se aumenta la cantidad de Magistrados
+            *nombraMagistradoCongreso = FALSE;
         }
 
+        sem_wait(semLegis);                                               //Se bloquea el mutex ya que no se podra usar Legislativo.acc mientras ejecute una accion
+
+        sem_wait(semDay);
+        *day = *day + 1;                                                  //Se aumenta el dia
+        sem_post(semDay);
+
         vacio = TRUE;                                                     //
-        Encontro = FALSE;                                                 //Inicializa las variables
-        cancel = FALSE;                                                   //
+        Encontro = FALSE;                                                 //
+        cancel = FALSE;                                                   //Inicializa las variables
+        destitucion = FALSE;                                              //
+        censurar = FALSE;                                                 //
         fp = fopen(direccionLegis, "r");
 
         //Encuentra una accion, con 20% de probabilidad
@@ -521,9 +634,10 @@ void Legislativo()
                 }
             }
             if(vacio==TRUE){                                              //Si el archivo de entrada esta vacio
-                read(fd1[0], &day, sizeof(day));
-                day--;                                                    //Se decrementa el dia ya que no es encontro accion
-                write(fd1[1], &day, sizeof(day));
+                sem_wait(semDay);
+                *day = *day - 1;                                          //Se decrementa el dia ya que no es encontro accion
+                *aunTieneAcciones = *aunTieneAcciones - 1;
+                sem_post(semDay);
                 free(Decision);                                           //Liberamos espacio de memoria de la variable
                 free(nombreAccion);                                       //Liberamos espacio de memoria de la variable
                 sem_post(semLegis);                                       //Se desbloquea el semaforo que se bloqueo al entrar a buscar acciones
@@ -558,10 +672,12 @@ void Legislativo()
                     //Si requiere aprobacion
                     if(strstr(Decision, "aprobacion") && (num > tot/ *numMagistrados)){             //Si no se aprueba, se cancela la accion
                         cancel=TRUE;
+                        accionDestituirMagistrado();
                     }
                     //Si puede ser reprobado
                     else if(strstr(Decision, "reprobacion") && (num <= tot/ *numMagistrados)){      //Si hubo reprobacion, se cancela la accion
                         cancel=TRUE;
+                        accionDestituirMagistrado();
                     }
                 }
                 //Presidente/Magistrados aprueban
@@ -595,17 +711,60 @@ void Legislativo()
 
                 free(ArchivoEx);                                                                    //Liberamos espacio de memoria de la variable
             }
+            else if(strstr(Decision, "destituir") && cancel==FALSE){                                //Si la accion pide destituir a alguien
+                strcpy(Decision, strtok(NULL, "\n"));
+                if(strstr(Decision, "Magistrado")){                                                 //Si es un Magistrado, se da la señal que destituye un Magistrado
+                    destitucion = TRUE;
+                }
+            }
+            else if(strstr(Decision, "censurar") && cancel==FALSE){                                 //Si la accion pide censurar al presidente
+                strcpy(Decision, strtok(NULL, "\n"));
+                read(fd2[0], Magistrados, 20*sizeof(int));                                          //Actualiza el valor de Magistrados en este poder
+                write(fd2[1], Magistrados, 20*sizeof(int));                                         //
+                int num;
+                int tot=0;
+                int i=0;
+                while(Magistrados[i]!=0){                                                           //Se calcula la media aritmetica de los magistrados
+                    tot+=Magistrados[i];
+                    i++;
+                }                                                                           
+                sem_post(semApro);                                                                  //Manda una señal a el proceso que aprueba
+                read(fdApro[0], &num, sizeof(num));
+                if(num <= tot/ *numMagistrados){                                                    //Si la aprueba, se da la señal que se va a censurar al Presidente
+                    censurar = TRUE;
+                }
+                else{                                                                               //Si no la aprueba, el congreso decide Destituir a un Magistrado
+                    cancel = TRUE;
+                    accionDestituirMagistrado();
+                }
+            }
             else if(strstr(Decision, "exito") && (rand()%101<=*PorcentajeExitoLegis) && cancel==FALSE){       //Si la accion es exitosa
-                exito=TRUE; 
+                exito=TRUE;  
+                if(destitucion == TRUE){                                                                      //Si la accion destituye un Magistrado
+                    read(fd2[0], Magistrados, 20*sizeof(int));                                                //Leemos la version actualizada de Magistrados
+                    *numMagistrados = *numMagistrados - 1;                                                    //Decrementamos el numero de Magistrados 
+                    Magistrados[*numMagistrados] = 0;                                                        
+                    write(fd2[1], Magistrados, 20*sizeof(int));                                               //Actualizamos el array de Magistrados
+                }
+                if(censurar == TRUE){                                                                         //Si la accion censuraba al presidente
+                    *censurado = TRUE;                                                                        //El presidente es censurado
+                }
                 break;
             }
             else if(strstr(Decision, "fracaso")){                                                             //Si la accion fracaza
                 exito=FALSE;
                 break;
             }
+
+            if(*disuelto == TRUE){                                                       //Si el Congreso fue disuelto, se detiene en la accion
+                free(Decision);                                                          //Libera el espacio en memoria de la variable
+                free(nombreAccion);                                                      //Libera el espacio en memoria de la variable
+                fclose(fp);                                                              //Cierra el archivo Legislativo.acc
+                sem_post(semLegis);                                            
+                return;                                                                  //Termina la ejecucion del hilo
+            }
         }
-        strcpy(Decision, strtok(NULL,"\0"));                                       //Toma el resto de el mensaje 
-                   
+        strcpy(Decision, strtok(NULL,"\0"));                                       //Toma el resto de el mensaje   
         if(exito==TRUE){                                                           //Si la accion es exitosa, se elimina de el archivo
             rewind(fp);
             deleteAccion(fp, direccionLegis, nombreAccion, "temp2.txt");
@@ -626,6 +785,7 @@ void Legislativo()
 
 void Judicial() 
 {   
+    sem_t* semDay=sem_open("SemDay", O_CREAT, 0666, 1);                   //
     sem_t* semAproEje=sem_open("AprobacionEjec", O_CREAT, 0666, 0);       //
     sem_t* semApro=sem_open("Aprobacion", O_CREAT, 0666, 0);              //
     sem_t* semEjec=sem_open("Ejecutivo", O_CREAT, 0666, 1);               //
@@ -649,19 +809,22 @@ void Judicial()
     srand(time(0));                                                       //Seed de rand()
     FILE* fp;
 
-    while(TRUE){ 
-        if(numMagistrados<=0){                                            //Si el numero de magistrados es menor que 0, debe esperar en su paso
-            while(TRUE){}
+    while(*day-1<daysMax){ 
+        if(*numMagistrados<=0){                                            //Si el numero de magistrados es menor que 0, debe esperar en su paso
+            while(TRUE){
+                if(*aunTieneAcciones==1){
+                    free(Decision);                                        //Liberamos memoria de la variable
+                    free(nombreAccion);                                    //Liberamos memoria de la variable
+                    return;                                                //Terminamos la ejecucion
+                }
+            }
         }
 
         sem_wait(semJud);                                                 //Se bloquea el mutex ya que no se podra usar Judicial.acc mientras ejecute una accion
 
-        read(fd1[0], &day, sizeof(day));                                  //Se lee el valor actualizado de day
-        day++;                                                            //Se aumenta el dia
-        write(fd1[1], &day, sizeof(day));                                 //Se actualiza el valor de day para todos los subprocesos
-        if(day-1>=daysMax){                                               //Si se completaron los dias de ejecucion, se para el subproceso
-            return;
-        }
+        sem_wait(semDay);                                                 
+        *day = *day + 1;                                                  //Se aumenta el dia
+        sem_post(semDay);
 
         Encontro = FALSE;                                                 //
         vacio = TRUE;                                                     //Inicializa las variables
@@ -681,9 +844,10 @@ void Judicial()
                 }
             }
             if(vacio==TRUE){                                              //Si el archivo de entrada esta vacio
-                read(fd1[0], &day, sizeof(day));
-                day--;                                                    //Se decrementa el dia ya que no es encontro accion
-                write(fd1[1], &day, sizeof(day));
+                sem_wait(semDay);
+                *day = *day - 1;                                          //Se decrementa el dia ya que no es encontro accion
+                *aunTieneAcciones = *aunTieneAcciones - 1;
+                sem_post(semDay);
                 free(Decision);                                           //Liberamos espacio de memoria de la variable
                 free(nombreAccion);                                       //Liberamos espacio de memoria de la variable
                 sem_post(semJud);                                         //Se desbloquea el semaforo que se bloqueo al entrar a buscar acciones
@@ -849,10 +1013,11 @@ void aprobacion()
 void main(int argc, char *argv[]){
 
     sem_unlink("Aprobacion");                                           //
+    sem_unlink("SemDay");                                               //
     sem_unlink("AprobacionEjec");                                       //
     sem_unlink("Ejecutivo");                                            //
-    sem_unlink("Legislativo");                                          //
-    sem_unlink("Judicial");                                             //Si el semaforo existia antes de iniciar el programa, lo elimina
+    sem_unlink("Legislativo");                                          //Si el semaforo existia antes de iniciar el programa, lo elimina
+    sem_unlink("Judicial");                                             //
     sem_unlink("Mutex");                                                //
     sem_unlink("Mutex2");                                               //
     sem_unlink("Mutex3");                                               //
@@ -868,20 +1033,30 @@ void main(int argc, char *argv[]){
         exit(1);
     }
 
-    PorcentajeExitoEjec = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);   //
-    PorcentajeExitoLegis = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);  //
-    numMagistrados = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);        //
-    aunEnInclusivoEjec = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);    //Comparte la variable entre padre e Hijo
-    aunEnInclusivoLegis = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);   //
-    aunEnInclusivoJud = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);     //
-    aunEnInclusivoArchivo = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); //
+    PorcentajeExitoEjec = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);      //
+    PorcentajeExitoLegis = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);     //
+    numMagistrados = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);           //
+    aunEnInclusivoEjec = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);       //
+    aunEnInclusivoLegis = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);      //
+    aunEnInclusivoJud = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);        //
+    aunEnInclusivoArchivo = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);    //Comparte la variable entre padre e Hijo
+    aunTieneAcciones = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);         //
+    nombraMagistradoCongreso = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); //
+    day = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);                      //
+    censurado = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);                //
+    disuelto = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);                 //
     *PorcentajeExitoEjec = 66;                                          //
     *PorcentajeExitoLegis = 66;                                         //
     *numMagistrados = 8;                                                //
-    *aunEnInclusivoEjec = 0;                                            //Inicializa las variables
+    *aunEnInclusivoEjec = 0;                                            //
     *aunEnInclusivoLegis = 0;                                           //
-    *aunEnInclusivoJud = 0;                                             //
+    *aunEnInclusivoJud = 0;                                             //Inicializa las variables
     *aunEnInclusivoArchivo = 0;                                         //
+    *aunTieneAcciones = 3;                                              // 
+    *nombraMagistradoCongreso = FALSE;                                  //
+    *day = 0;                                                           //
+    *censurado = FALSE;                                                 //
+    *disuelto = FALSE;                                                  //
 
     direccionEjec = (char*)calloc(1, 200);
     direccionLegis = (char*)calloc(1, 200);
@@ -909,10 +1084,6 @@ void main(int argc, char *argv[]){
         perror("pipe ");                                              
         exit(1);
     }
-    if(pipe(fd1)<0){                                                    //Inicializa el pipe fd1
-        perror("pipe ");                                              
-        exit(1);
-    }
     if(pipe(fd2)<0){                                                    //Inicializa el pipe fd2
         perror("pipe ");                                              
         exit(1);
@@ -926,7 +1097,6 @@ void main(int argc, char *argv[]){
         exit(1);
     }
 
-    write(fd1[1], &day, sizeof(day));                                   //Ingresa el valor inicial de day en el pipe
     write(fd2[1], Magistrados, 20*sizeof(int));                         //Ingresa el valor inicial de Magistrados en el pipe
     if (fork() == 0){
         //Subproceso para Ejecutivo 
@@ -935,7 +1105,13 @@ void main(int argc, char *argv[]){
     else{
         if (fork() == 0){ 
             //Subproceso para Legislativo
-            Legislativo(); 
+            Legislativo(0); 
+            while(*day-1<daysMax && *aunTieneAcciones>0){
+                if(*disuelto==TRUE){                                                       //Si se disuelve el Congreso
+                    *disuelto=FALSE;
+                    Legislativo(1);
+                }
+            }
         }
         else{
             if (fork() == 0){ 
@@ -954,7 +1130,9 @@ void main(int argc, char *argv[]){
                         aprobacion();
                     }
                     else{
-                        getchar();
+                        while(*day-1<daysMax && *aunTieneAcciones>0){
+                            sleep(1);
+                        }
                     }
                 }                                                                  
             }
