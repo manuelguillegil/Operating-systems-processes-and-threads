@@ -52,6 +52,9 @@ pthread_mutex_t mutexArchivo;                                                 //
 pthread_t thread_id_ejec;                                                     //Id de Ejecutivo
 pthread_t thread_id_legis;                                                    //Id de Legislativo                                                            
 pthread_t thread_id_jud;                                                      //Id de Judicial
+int diasLegislativo = 0;
+int diasEjecutivo = 0; 
+int diasJudicial = 0; 
 
 
 /*Funcion para hacer delay, la usamos para cuando hay que hacer esperas menores
@@ -829,7 +832,7 @@ void *threadLegis(void *vargp)
                 pthread_mutex_unlock(&mutexLegis);                                            
                 pthread_exit(NULL);                                                      //Termina la ejecucion del hilo
             }
-        }
+        }  
         strcpy(Decision, strtok(NULL,"\0"));                                             //Toma el resto de el mensaje   
         strcpy(toPrensa, "Congreso ");
         strcat(toPrensa, Decision);                                                      
@@ -1077,6 +1080,7 @@ void *threadPrensa(void *vargp)
     char Hemeroteca[daysMax][200];                                                    //Array de Strings que tendra todas las acciones imprimidas
     char toPrensa[200];                                                               //Variable para imprimir la accion
     int print=1;                                                                      //Variable para saber que dia se hizo la accion
+    char *str;                                                         // Variable que nos sirve que ente hizo la acción en el día
 
     for(int i=0; i<daysMax; i++){                                                     //Limpia el array
         memset(Hemeroteca[i], 0, sizeof(Hemeroteca[i]));
@@ -1089,6 +1093,16 @@ void *threadPrensa(void *vargp)
         }
         else{
             printf("%d.%s\n\n", print, toPrensa); 
+        }
+        str = toPrensa;                                                               // Añadimos todo el contenido del mensaje de ToPrensa a la variable
+        if(strstr(str, "Presidente")) {
+            diasEjecutivo++;
+        }
+        else if(strstr(str, "Congreso")) {
+            diasLegislativo++;
+        }
+        else if (strstr(str, "Tribunal")) {
+            diasJudicial++;
         }
         strcpy(Hemeroteca[print-1], toPrensa);                                        //Coloca el mensaje en la Hemeroteca
         memset(toPrensa, 0, sizeof(toPrensa));                                        //Se vacia toPrensa
@@ -1197,10 +1211,10 @@ void main(int argc, char *argv[]){
 
     //Print final
     for(int i=1; i<=congresos; i++){
-        printf("Legislativo: %.0f acciones exitosas (%.1f%% de acciones planeadas) en n dias\n", ExitoLegis[(i*2)-1], ExitoLegis[(i*2)]);
+        printf("Legislativo: %.0f acciones exitosas (%.1f%% de acciones planeadas) en %d dias\n", ExitoLegis[(i*2)-1], ExitoLegis[(i*2)], diasLegislativo);
     }     
     for(int i=1; i<=presidentes; i++){
-        printf("Ejecutivo: %.0f acciones exitosas (%.1f%% de acciones planeadas) en n dias\n", ExitoEjec[(i*2)-1], ExitoEjec[(i*2)]);
+        printf("Ejecutivo: %.0f acciones exitosas (%.1f%% de acciones planeadas) en %d dias\n", ExitoEjec[(i*2)-1], ExitoEjec[(i*2)], diasEjecutivo);
     }             
-    printf("Judicial: %.0f acciones exitosas (%.1f%% de acciones planeadas) en n dias\n", ExitoJud[0], ExitoJud[1]);       
+    printf("Judicial: %.0f acciones exitosas (%.1f%% de acciones planeadas) en %d dias\n", ExitoJud[0], ExitoJud[1], diasJudicial);       
 }
