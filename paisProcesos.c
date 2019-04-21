@@ -44,7 +44,9 @@ int* aunEnInclusivoEjec;                                                      //
 int* aunEnInclusivoLegis;                                                     // Variables utilizadas para saber cuantos poderes aun esta en inclusivo
 int* aunEnInclusivoJud;                                                       // (Las usamos para resolver el problema de Lectores/Escritores generado por
 int* aunEnInclusivoArchivo;                                                   // abrir archivos de manera inclusiva o exclusiva)
-
+int* diasLegislativo;
+int* diasEjecutivo; 
+int* diasJudicial;
 
 /*Funcion para hacer delay, la usamos para cuando hay que hacer esperas menores
 a 1 segundo*/
@@ -1143,6 +1145,7 @@ void Prensa(){
     char Hemeroteca[daysMax][200];                                                 //Array de Strings que tendra todas las acciones imprimidas
     char toPrensa[200];                                                            //Variable para imprimir la accion
     int print=1;                                                                   //Variable para saber que dia se hizo la accion
+    char *str;
     for(int i=0; i<daysMax; i++){
         memset(Hemeroteca[i], 0, sizeof(Hemeroteca[i]));                           //Limpia el array
     }
@@ -1154,6 +1157,16 @@ void Prensa(){
         }
         else{
             printf("%d.%s\n\n", print, toPrensa); 
+        }
+        str = toPrensa;                                                               // Añadimos todo el contenido del mensaje de ToPrensa a la variable
+        if(strstr(str, "Presidente")) {
+            diasEjecutivo++;
+        }
+        else if(strstr(str, "Congreso")) {
+            diasLegislativo++;
+        }
+        else if (strstr(str, "Tribunal")) {
+            diasJudicial++;
         }
         strcpy(Hemeroteca[print-1], toPrensa);                                     //Coloca el mensaje en la Hemeroteca
         memset(toPrensa, 0, sizeof(toPrensa));                                     //Se vacia toPrensa
@@ -1234,6 +1247,12 @@ void main(int argc, char *argv[]){
     disuelto = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);                                                                                                                  
     presidentes = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);                                                          
     congresos = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);  
+    diasLegislativo = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); 
+    diasEjecutivo = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); 
+    diasJudicial = mmap(NULL, sizeof(int), PROT_READ|PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0); 
+    *diasLegislativo = 0;
+    *diasEjecutivo = 0;
+    *diasJudicial = 0;
     *PorcentajeExitoEjec = 66;                                          //
     *PorcentajeExitoLegis = 66;                                         //
     *numMagistrados = 8;                                                //
