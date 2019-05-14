@@ -3,6 +3,7 @@
 #include <unistd.h> 
 #include <pthread.h> 
 #include <string.h>
+#include <math.h> 
 
 #define TRUE 1
 #define FALSE 0
@@ -60,12 +61,19 @@ int DESTRIBUNAL = 0;
 int diasLegislativo = 0;
 int diasEjecutivo = 0;
 int diasJudicial = 0;
-int recesoEjectuvo = 0;
-int numRecesosEjectivo = 0;
+
+int recesoEjecutivo = 0;
+int numRecesoEjecutivo = 0;
+int numRecesosEjecutivoDias = 1; 
+int cantidadRecesoEjecutivo;
 int recesoLegislativo = 0;
 int numRecesosLegislativo = 0;
+int numRecesosLegislativoDias = 1;
+int cantidadRecesoLegislativo;
 int recesoJudicial = 0;
 int numRecesosJudicial = 0;
+int numRecesosJudicialDias = 1;
+int cantidadRecesoJudicial;
 
 /*Funcion para hacer delay, la usamos para cuando hay que hacer esperas menores
 a 1 segundo*/
@@ -428,6 +436,31 @@ int contarAcciones(FILE *fp){
     return result;
 }
 
+void strreverse(char* begin, char* end) {   
+    char aux;   
+    while(end>begin)    
+        aux=*end, *end--=*begin, *begin++=aux;  
+}
+
+void itoa_(int value, char *str)
+{
+    char* wstr=str; 
+    int sign;   
+    div_t res;
+    
+    if ((sign=value) < 0) value = -value;
+    
+    do {    
+      *wstr++ = (value%10)+'0'; 
+    }while(value=value/10);
+    
+    if(sign<0) *wstr++='-'; 
+    *wstr='\0';
+
+    strreverse(str,wstr-1);
+}
+
+
 /*Funcion Thread del Ejecutivo*/
 void *threadEjec(void *vargp) 
 { 
@@ -523,6 +556,27 @@ void *threadEjec(void *vargp)
                 pthread_exit(NULL);
             }
             if(!Encontro){
+                char* mensaje = (char*)calloc(1, 200); 
+                cantidadRecesoEjecutivo = 3^numRecesosJudicial;
+
+                if(numRecesosEjecutivoDias % 3 == 0) {
+                    numRecesoEjecutivo++;
+                }
+
+                numRecesosEjecutivoDias++;
+               
+                char* buffer = (char*)calloc(1, 200);
+                itoa_(cantidadRecesoEjecutivo, buffer);           
+
+                strcpy(mensaje,"  Presidente toma un descanso de días: ");
+
+                char* buffer2 = (char*)calloc(1, 500);
+                strcpy(buffer2,strcat(mensaje, (char*) buffer));
+
+                write(fd[1], mensaje, sizeof(toPrensa));                 //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
+                free(buffer);
+                free(mensaje);
+                recesoEjecutivo = 1;
                 rewind(fp);                                               //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
@@ -766,6 +820,27 @@ void *threadLegis(void *vargp)
             pthread_exit(NULL);
             }
             if(!Encontro){
+                char* mensaje = (char*)calloc(1, 200); 
+                cantidadRecesoLegislativo = 3^numRecesosLegislativo;
+
+                if(numRecesosLegislativoDias%3 == 0) {
+                    numRecesosLegislativo++;
+                }
+
+                numRecesosLegislativoDias++;
+               
+                char* buffer = (char*)calloc(1, 200);
+                itoa_(cantidadRecesoLegislativo, buffer);           
+
+                strcpy(mensaje,"  Congreso toma un descanso de días: ");
+
+                char* buffer2 = (char*)calloc(1, 500);
+                strcpy(buffer2,strcat(mensaje, (char*) buffer));
+
+                write(fd[1], mensaje, sizeof(toPrensa));                 //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
+                free(buffer);
+                free(mensaje);
+                recesoLegislativo = 1;
                 rewind(fp);                                                       //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             } 
             else{
@@ -936,7 +1011,6 @@ void *threadLegis(void *vargp)
     pthread_exit(NULL);                                                                 //Termina la ejecucion del hilo
 }
 
-
 void *threadJud(void *vargp) 
 { 
     size_t len = 0;
@@ -1018,6 +1092,27 @@ void *threadJud(void *vargp)
                 pthread_exit(NULL);
             }
             if(!Encontro){
+                char* mensaje = (char*)calloc(1, 200); 
+                cantidadRecesoJudicial = 3^numRecesosJudicial;
+
+                if(numRecesosJudicialDias%3 == 0) {
+                    numRecesosJudicial++;
+                }
+
+                numRecesosJudicialDias++;
+               
+                char* buffer = (char*)calloc(1, 200);
+                itoa_(cantidadRecesoJudicial, buffer);           
+
+                strcpy(mensaje,"  Tribunal Supremo toma un descanso de días: ");
+
+                char* buffer2 = (char*)calloc(1, 500);
+                strcpy(buffer2,strcat(mensaje, (char*) buffer));
+
+                write(fd[1], mensaje, sizeof(toPrensa));                 //Se escribe la el mensaje de exito/fracaso al pipe que conecta este hilo con la prensa
+                free(buffer);
+                free(mensaje);
+                recesoJudicial = 1;
                 rewind(fp);                                                   //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
@@ -1194,12 +1289,10 @@ void *threadPrensa(void *vargp)
         }
 
         if(strstr(toPrensa,"censuro")) { 
-            printf("%s\n", " Se censuró el presidente panita");
             DESPRESIDENTE = 1;
         }
 
         if(strstr(toPrensa,"disolvio")) { 
-            printf("%s\n", " Se disolvió el Congreso de la derecha");
             DESTRIBUNAL = 1;
         }
 
