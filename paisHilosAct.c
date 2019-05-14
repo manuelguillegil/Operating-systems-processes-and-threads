@@ -482,7 +482,6 @@ void *threadEjec(void *vargp)
 
     while(day-1<daysMax){            
         pthread_mutex_lock(&mutexEjec);                                   //Se bloquea el mutex ya que no se podra usar Ejecutivo.acc mientras ejecute una accion
-         
 
         if(DESPRESIDENTE == 1) {              // Si se hizo la destitución del Presidente, el hilo muere
         pthread_mutex_lock(&mutex1);                              //Se bloquea el mutex para evitar inconsistencia en la variable day y aunTieneAcciones
@@ -577,6 +576,15 @@ void *threadEjec(void *vargp)
                 free(buffer);
                 free(mensaje);
                 recesoEjecutivo = 1;
+                
+                delay(cantidadRecesoEjecutivo * 10000000);
+                char* mensaje2 = (char*)calloc(1, 200);
+                strcpy(mensaje2,"  Presidente regresó de su regreso ");
+                write(fd[1], mensaje2, sizeof(toPrensa));
+
+                free(mensaje2);
+                recesoEjecutivo = 0;
+                
                 rewind(fp);                                               //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
@@ -755,6 +763,16 @@ void *threadLegis(void *vargp)
 
     while(day-1<daysMax){
 
+//        if(recesoLegislativo == TRUE) {
+//            delay(cantidadRecesoLegislativo * 10000);
+//            char* mensaje2 = (char*)calloc(1, 200);
+//            strcpy(mensaje2,"  Congreso regresó de su regreso ");
+//            write(fd[1], mensaje2, sizeof(toPrensa));
+//
+//            free(mensaje2);
+//            recesoLegislativo = 0;
+//        }
+
         if(nombraMagistradoCongreso==TRUE){                                       //Si al congreso le toca nombrar un magistrado, se mantiene ocupado escogiendo
             Magistrados[numMagistrados] = rand()%101;                             //...su probabilidad de exito
             numMagistrados = numMagistrados + 1;
@@ -841,6 +859,16 @@ void *threadLegis(void *vargp)
                 free(buffer);
                 free(mensaje);
                 recesoLegislativo = 1;
+                
+                delay(cantidadRecesoLegislativo * 10000000);
+                char* mensaje2 = (char*)calloc(1, 200);
+                strcpy(mensaje2,"  Congreso regresó de su regreso ");
+                write(fd[1], mensaje2, sizeof(toPrensa));
+
+                free(mensaje2);
+                recesoLegislativo = 0;
+                
+                
                 rewind(fp);                                                       //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             } 
             else{
@@ -1028,7 +1056,8 @@ void *threadJud(void *vargp)
                                                             
 
     
-    while(day-1<daysMax){ 
+    while(day-1<daysMax){
+        
         if(numMagistrados<=0){                                                //Si el numero de magistrados es menor o igual que 0, debe esperar en su paso
             while(TRUE){
                 if(aunTieneAcciones==1){                                      //Si todos los poderes terminaron excepto el Judicial y este no tiene magistrados
@@ -1113,6 +1142,15 @@ void *threadJud(void *vargp)
                 free(buffer);
                 free(mensaje);
                 recesoJudicial = 1;
+                
+                delay(cantidadRecesoJudicial * 10000000);
+                char* mensaje2 = (char*)calloc(1, 200);
+                strcpy(mensaje2,"  Tribunal Supremo regresó de su regreso ");
+                write(fd[1], mensaje2, sizeof(toPrensa));
+
+                free(mensaje2);
+                recesoJudicial = 0;
+                
                 rewind(fp);                                                   //Si no se decidio por una accion, el apuntador vuelve al inicio del archivo
             }
             else{
